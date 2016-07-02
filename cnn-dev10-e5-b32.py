@@ -299,8 +299,8 @@ class Config(object):
     """
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
-    batch_size = 128
-    n_epochs = 10
+    batch_size = 32
+    n_epochs = 5
     lr = 0.01
     dropout = 0.5
 
@@ -491,13 +491,6 @@ if __name__ == "__main__":
     import sys
     model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
     mkdir_p(model_dir)
-    error = open(os.path.join(model_dir, sys.argv[1] + '_error_' + timestamp + '.log'), 'w+')
-    info = open(os.path.join(model_dir, sys.argv[1] + '_info_' + timestamp + '.log'), 'w+')
-    sys.stderr = error
-    sys.stdout = info
 
     test_set = os.path.join("test.csv")
     experiment(10, test_set, model_dir, timestamp)
-
-    error.close()
-    info.close()
