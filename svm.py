@@ -41,7 +41,7 @@ def experiment_svm(input_path_training):
 
     classifier = Pipeline([
         ('vect', TfidfVectorizer(stop_words='english', min_df=0.001)),
-        ('clf', OneVsRestClassifier(SVC(cache_size=5000, class_weight='balanced', kernel="linear", C=10, verbose=2))),
+        ('clf', OneVsRestClassifier(SVC(cache_size=5000, class_weight='balanced', kernel="linear", C=10, verbose=1))),
     ])
     classifier.fit(X, y)
     print "Finish training"
@@ -74,13 +74,13 @@ def experiment_svm_cv(input_path_training):
     param_grid = [
         {
             'clf__estimator__kernel': ['linear'],
-            'clf__estimator__C': [1, 10, 100],
+            'clf__estimator__C': [1e-1, 1, 10, 100],
             'vect__min_df': [1e-3, 1e-4, 1e-5]
         },
         {
             'clf__estimator__kernel': ['rbf'],
+            'clf__estimator__C': [1e-1, 1, 10, 100],
             'clf__estimator__gamma': [1e-1, 1],
-            'clf__estimator__C': [10, 100],
             'vect__min_df': [1e-3, 1e-4, 1e-5]
         }
     ]
@@ -88,7 +88,7 @@ def experiment_svm_cv(input_path_training):
         ('vect', TfidfVectorizer(stop_words='english')),
         ('clf', OneVsRestClassifier(SVC(cache_size=5000, class_weight='balanced'))),
     ])
-    gs = GridSearchCV(classifier, param_grid, cv=5, n_jobs=-1, verbose=2)
+    gs = GridSearchCV(classifier, param_grid, cv=5, n_jobs=-1, verbose=1)
     gs.fit(X, y)
     print "Finish training"
 
