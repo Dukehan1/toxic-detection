@@ -122,4 +122,4 @@ def experiment_svm_dev_set(input_path_training):
 
 if __name__ == "__main__":
     training_set = os.path.join("train.csv")
-    experiment_svm(training_set)
+    experiment_svm_cv(training_set)
