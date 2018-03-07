@@ -41,7 +41,7 @@ def experiment_svm(input_path_training):
 
     classifier = Pipeline([
         ('vect', TfidfVectorizer(stop_words='english', min_df=0.001)),
-        ('clf', OneVsRestClassifier(SVC(class_weight='balanced', kernel="linear", C=10, verbose=2))),
+        ('clf', OneVsRestClassifier(SVC(cache_size=5000, class_weight='balanced', kernel="linear", C=10, verbose=2))),
     ])
     classifier.fit(X, y)
     print "Finish training"
@@ -86,7 +86,7 @@ def experiment_svm_cv(input_path_training):
     ]
     classifier = Pipeline([
         ('vect', TfidfVectorizer(stop_words='english')),
-        ('clf', OneVsRestClassifier(SVC(class_weight='balanced'))),
+        ('clf', OneVsRestClassifier(SVC(cache_size=5000, class_weight='balanced'))),
     ])
     gs = GridSearchCV(classifier, param_grid, cv=5, n_jobs=-1, verbose=2)
     gs.fit(X, y)
