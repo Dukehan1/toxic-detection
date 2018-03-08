@@ -239,7 +239,7 @@ class NBT_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, 1, self.config.max_length))
         self.mask_placeholder = tf.placeholder(tf.bool, (None, self.config.max_length))
-        self.labels_placeholder = tf.placeholder(tf.int32, (None, 6))
+        self.labels_placeholder = tf.placeholder(tf.float32, (None, 6))
         self.dropout_placeholder = tf.placeholder(tf.float32)
 
     def create_feed_dict(self, inputs_batch, mask_batch, labels_batch=None, dropout=1):
