@@ -1,13 +1,15 @@
 # coding: utf-8
 
 import os
+import errno
 from datetime import datetime
 import time
 import tensorflow as tf
 import numpy as np
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.feature_extraction.text import strip_accents_ascii
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 MAX_SEQUENCE_LENGTH = 200
 EMBEDDING_DIM = 200
@@ -34,8 +36,22 @@ def get_timestamp():
     dt = "%s%03d" % (dt, int(micro) / 1000)
     return dt
 
-def cnn_training(input_path_training):
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
+def normalize(text):
+    text = strip_accents_ascii(text)
+    text = map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text))
+    return text
+
+
+def cnn_training(input_path_training):
     print 80 * "="
     print "INITIALIZING"
     print 80 * "="
@@ -50,9 +66,9 @@ def cnn_training(input_path_training):
 
     tokenizer = TreebankWordTokenizer()
     df = pd.read_csv(input_path_training)
+    term = 0
     for index, row in df.iterrows():
-        sentence = map(lambda t: t.lower(), tokenizer.tokenize(row['comment_text'].decode('utf-8')))
-        print sentence
+        sentence = normalize(row['comment_text'].decode('utf-8'))
 
         # mask
         length = len(sentence) if len(sentence) < MAX_SEQUENCE_LENGTH else MAX_SEQUENCE_LENGTH
@@ -78,9 +94,9 @@ def cnn_training(input_path_training):
             row['insult'],
             row['identity_hate']
         ])
-        break
+        term += 1
+        if term > 100: break
     training_set = [inputs_ret, mask_ret, labels_ret]
-    print training_set
     print "Finish loading data"
 
     config = Config()
@@ -88,8 +104,9 @@ def cnn_training(input_path_training):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model = NBT_CNNModel(config, embeddings_matrix, os.path.join(os.path.abspath('.'),
-                                                                     get_timestamp() + ".model"))
+        model_dir = os.path.join(os.path.abspath('.'), get_timestamp())
+        mkdir_p(model_dir)
+        model = NBT_CNNModel(config, embeddings_matrix, os.path.join(model_dir, get_timestamp() + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -98,7 +115,7 @@ def cnn_training(input_path_training):
         # init = tf.initialize_all_variables()
         saver = tf.train.Saver(tf.trainable_variables())
 
-        with tf.Session() as session:
+        with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             session.run(init)
 
             print 80 * "="
@@ -111,12 +128,14 @@ def cnn_training(input_path_training):
 
     return 0
 
+
 class Model(object):
     """Abstracts a Tensorflow graph for a learning task.
 
     We use various Model classes as usual abstractions to encapsulate tensorflow
     computational graphs.
     """
+
     def add_placeholders(self):
         raise NotImplementedError("Each Model must re-implement this method.")
 
@@ -147,6 +166,7 @@ class Model(object):
         self.pred = self.add_prediction_op()
         self.loss = self.add_loss_op(self.pred)
         self.train_op = self.add_training_op(self.loss)
+
 
 def get_minibatches(data, minibatch_size, shuffle=True):
     """
@@ -185,8 +205,10 @@ def get_minibatches(data, minibatch_size, shuffle=True):
         yield [minibatch(d, minibatch_indices) for d in data] if list_data \
             else minibatch(data, minibatch_indices)
 
+
 def minibatch(data, minibatch_idx):
     return data[minibatch_idx] if type(data) is np.ndarray else [data[i] for i in minibatch_idx]
+
 
 class Config(object):
     """Holds model hyperparams and data information.
@@ -205,14 +227,16 @@ class Config(object):
     """
     for NBT-CNN
     """
-    filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8]
-    num_filters = 50
+    filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    num_filters = 100
+
 
 '''
 Reference: https://arxiv.org/abs/1606.03777
 '''
-class NBT_CNNModel(Model):
 
+
+class NBT_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, 1, self.config.max_length))
         self.mask_placeholder = tf.placeholder(tf.bool, (None, self.config.max_length))
@@ -284,7 +308,8 @@ class NBT_CNNModel(Model):
     def add_loss_op(self, preds):
         loss = 0
         for i in range(6):
-            loss += tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits = preds[:, i], labels = self.labels_placeholder[:, i]))
+            loss += tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(logits=preds[:, i], labels=self.labels_placeholder[:, i]))
         return loss / 6
 
     def add_training_op(self, loss):
@@ -297,11 +322,12 @@ class NBT_CNNModel(Model):
         return loss
 
     def run_epoch(self, sess, train_examples):
-        for i, (inputs_batch, mask_batch, labels_batch) in enumerate(get_minibatches(train_examples, self.config.batch_size)):
+        for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
+                get_minibatches(train_examples, self.config.batch_size)):
             loss = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
             print "loss: ", loss
 
-        print "Evaluating on training set",
+        print "Evaluating on training set"
         predict_raw = self.predict_on_batch(sess, train_examples[0], train_examples[1])
         predict = np.zeros(predict_raw.shape, dtype='int32')
         for i in range(len(predict_raw)):
@@ -312,18 +338,20 @@ class NBT_CNNModel(Model):
         training_f1 = f1_score(np.asarray(train_examples[2]), predict, average='weighted')
         print "- Acc: ", training_acc
         print "- F1: ", training_f1
-        return training_f1
+        auc = roc_auc_score(np.asarray(train_examples[2]), predict_raw, average='macro')
+        print "- AUC: " + str(auc)
+        return auc
 
     def fit(self, sess, saver, train_examples):
-        best_training_f1 = 0
+        best_training_auc = 0
         for epoch in range(self.config.n_epochs):
             print "Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs)
-            training_f1 = self.run_epoch(sess, train_examples)
-            if training_f1 >= best_training_f1:
-                best_training_f1 = training_f1
+            training_auc = self.run_epoch(sess, train_examples)
+            if training_auc >= best_training_auc:
+                best_training_auc = training_auc
                 if saver:
                     print '-' * 80
-                    print "New best training f1! Saving model in " + self.model_path
+                    print "New best training auc! Saving model in " + self.model_path
                     # 只存数据，不保存网络结构，否则model文件会非常大
                     saver.save(sess, self.model_path, write_meta_graph=False)
                     print '-' * 80
