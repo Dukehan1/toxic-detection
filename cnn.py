@@ -229,6 +229,13 @@ class Config(object):
     filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     num_filters = 100
 
+    """
+    for LSTM
+    """
+    hidden_size = 200
+    clip_gradients = True
+    max_grad_norm = 5.
+
 
 '''
 Reference: https://arxiv.org/abs/1606.03777
@@ -255,24 +262,32 @@ class NBT_CNNModel(Model):
     def add_prediction_op(self):
 
         word_embeddings = tf.convert_to_tensor(self.pretrained_word_embeddings)
-        looked_up = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder[:, 0, :])
-        x_words = tf.expand_dims(looked_up, -1)
+        x_words = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder[:, 0, :])
 
         x_raw = [x_words]
         x = tf.concat(x_raw, 2)
+
+        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
+                                                                             initializer=tf.contrib.layers.xavier_initializer()),
+                                                     output_keep_prob=self.dropout_placeholder)
+        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
+                                                                             initializer=tf.contrib.layers.xavier_initializer()),
+                                                     output_keep_prob=self.dropout_placeholder)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
+        h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
 
         pooled_outputs = []
         for i, filter_size in enumerate(self.config.filter_sizes):
             with tf.variable_scope("conv-maxpool-%s" % filter_size):
                 # Convolution Layer
-                filter_shape = [filter_size, self.config.embed_size, 1, self.config.num_filters]
+                filter_shape = [filter_size, self.config.hidden_size, 1, self.config.num_filters]
 
                 W = tf.get_variable('W', filter_shape,
                                     tf.float32, tf.contrib.layers.xavier_initializer())
                 b1 = tf.get_variable('b1', (self.config.num_filters,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
                 conv = tf.nn.conv2d(
-                    x,
+                    h_lstm,
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID")
@@ -329,15 +344,15 @@ class NBT_CNNModel(Model):
         print "Evaluating on training set"
         t = 0
         predict_raw = None
+        # prevent OOM
         while t < len(train_examples[0]):
             if predict_raw is None:
-                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 10000], train_examples[1][t:t + 10000])
+                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 1000], train_examples[1][t:t + 1000])
             else:
-                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 10000],
-                                                                            train_examples[1][t:t + 10000])), axis=0)
-            t += 10000
+                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 1000],
+                                                                            train_examples[1][t:t + 1000])), axis=0)
+            t += 1000
         auc = roc_auc_score(train_examples[2], predict_raw, average='macro')
-        '''
         predict = np.zeros(predict_raw.shape, dtype='int32')
         for i in range(len(predict_raw)):
             for j in range(len(predict_raw[i])):
@@ -347,8 +362,7 @@ class NBT_CNNModel(Model):
         training_f1 = f1_score(train_examples[2], predict, average='weighted')
         print "- Acc: ", training_acc
         print "- F1: ", training_f1
-        '''
-        print "- AUC: " + str(auc)
+        print "- AUC: ", auc
         return auc
 
     def fit(self, sess, saver, train_examples):
