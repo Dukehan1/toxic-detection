@@ -94,7 +94,7 @@ def cnn_training(input_path_training):
             row['identity_hate']
         ])
         # term += 1
-        # if term > 100: break
+        # if term > 250: break
     training_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
     print "Finish loading data"
 
@@ -327,7 +327,15 @@ class NBT_CNNModel(Model):
             print "loss: ", loss
 
         print "Evaluating on training set"
-        predict_raw = self.predict_on_batch(sess, train_examples[0], train_examples[1])
+        t = 0
+        predict_raw = None
+        while t < len(train_examples[0]):
+            if predict_raw is None:
+                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 10000], train_examples[1][t:t + 10000])
+            else:
+                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 10000],
+                                                                            train_examples[1][t:t + 10000])), axis=0)
+            t += 10000
         auc = roc_auc_score(train_examples[2], predict_raw, average='macro')
         '''
         predict = np.zeros(predict_raw.shape, dtype='int32')
