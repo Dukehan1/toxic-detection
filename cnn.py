@@ -64,7 +64,6 @@ def cnn_training(input_path_training):
     labels_ret = []
     mask_ret = []
 
-    tokenizer = TreebankWordTokenizer()
     df = pd.read_csv(input_path_training)
     term = 0
     for index, row in df.iterrows():
@@ -94,9 +93,9 @@ def cnn_training(input_path_training):
             row['insult'],
             row['identity_hate']
         ])
-        term += 1
-        if term > 100: break
-    training_set = [inputs_ret, mask_ret, labels_ret]
+        # term += 1
+        # if term > 100: break
+    training_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
     print "Finish loading data"
 
     config = Config()
@@ -240,7 +239,7 @@ class NBT_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, 1, self.config.max_length))
         self.mask_placeholder = tf.placeholder(tf.bool, (None, self.config.max_length))
-        self.labels_placeholder = tf.placeholder(tf.float32, (None, 6))
+        self.labels_placeholder = tf.placeholder(tf.int32, (None, 6))
         self.dropout_placeholder = tf.placeholder(tf.float32)
 
     def create_feed_dict(self, inputs_batch, mask_batch, labels_batch=None, dropout=1):
@@ -329,16 +328,18 @@ class NBT_CNNModel(Model):
 
         print "Evaluating on training set"
         predict_raw = self.predict_on_batch(sess, train_examples[0], train_examples[1])
+        auc = roc_auc_score(train_examples[2], predict_raw, average='macro')
+        '''
         predict = np.zeros(predict_raw.shape, dtype='int32')
         for i in range(len(predict_raw)):
             for j in range(len(predict_raw[i])):
                 if predict_raw[i, j] >= 0:
                     predict[i, j] = 1
-        training_acc = accuracy_score(np.asarray(train_examples[2]), predict)
-        training_f1 = f1_score(np.asarray(train_examples[2]), predict, average='weighted')
+        training_acc = accuracy_score(train_examples[2], predict)
+        training_f1 = f1_score(train_examples[2], predict, average='weighted')
         print "- Acc: ", training_acc
         print "- F1: ", training_f1
-        auc = roc_auc_score(np.asarray(train_examples[2]), predict_raw, average='macro')
+        '''
         print "- AUC: " + str(auc)
         return auc
 
