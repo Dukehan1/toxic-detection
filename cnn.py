@@ -50,7 +50,7 @@ def normalize(text):
     text = map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text))
     return text
 
-def experiment(input_path_training, input_path_test, model_dir, timestamp):
+def experiment(dev_id, input_path_test, model_dir, timestamp):
     print 80 * "="
     print "INITIALIZING"
     print 80 * "="
@@ -62,7 +62,11 @@ def experiment(input_path_training, input_path_test, model_dir, timestamp):
     inputs_ret = []
     labels_ret = []
     mask_ret = []
-    df = pd.read_csv(input_path_training)
+    df = []
+    df_idx = filter(lambda x: x != dev_id, range(1, 11))
+    for i in df_idx:
+        df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
+    df = pd.concat(df)
     term = 0
     for index, row in df.iterrows():
         sentence = normalize(row['comment_text'].decode('utf-8'))
@@ -94,7 +98,44 @@ def experiment(input_path_training, input_path_test, model_dir, timestamp):
         # term += 1
         # if term > 80: break
     training_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
-    print "Finish loading data"
+    print "Finish loading training data"
+
+    inputs_ret = []
+    labels_ret = []
+    mask_ret = []
+    df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
+    term = 0
+    for index, row in df.iterrows():
+        sentence = normalize(row['comment_text'].decode('utf-8'))
+
+        # mask
+        length = len(sentence) if len(sentence) < MAX_SEQUENCE_LENGTH else MAX_SEQUENCE_LENGTH
+        mask = [True] * length + [False] * (MAX_SEQUENCE_LENGTH - length)
+        mask_ret.append(mask)
+
+        # input
+        x = {}
+        x['ws'] = [0] * MAX_SEQUENCE_LENGTH
+        for i, item in [('ws', sentence)]:
+            # 超过最大长度则截断
+            for k, v in enumerate(item[:MAX_SEQUENCE_LENGTH]):
+                if dict[i].has_key(v):
+                    x[i][k] = dict[i][v]
+        x_flat = [x['ws']]
+        inputs_ret.append(x_flat)
+
+        labels_ret.append([
+            row['toxic'],
+            row['severe_toxic'],
+            row['obscene'],
+            row['threat'],
+            row['insult'],
+            row['identity_hate'],
+        ])
+        # term += 1
+        # if term > 200: break
+    dev_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
+    print "Finish loading dev data"
 
     config = Config()
 
@@ -117,7 +158,7 @@ def experiment(input_path_training, input_path_test, model_dir, timestamp):
             print "TRAINING"
             print 80 * "="
             start = time.time()
-            model.fit(session, saver, training_set)
+            model.fit(session, saver, training_set, dev_set)
             print "took {:.2f} seconds\n".format(time.time() - start)
             print "Done!"
 
@@ -258,7 +299,7 @@ class Config(object):
     """
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
-    batch_size = 32
+    batch_size = 128
     n_epochs = 10
     lr = 0.01
     dropout = 0.5
@@ -387,47 +428,53 @@ class LSTM_CNNModel(Model):
         _, loss, grad_norm = sess.run([self.train_op, self.loss, self.grad_norm], feed_dict=feed)
         return loss, grad_norm
 
-    def run_epoch(self, sess, train_examples):
+    def batch_evaluation(self, sess, examples):
+        t = 0
+        predict = None
+        # prevent OOM
+        while t < len(examples[0]):
+            if predict is None:
+                predict = self.predict_on_batch(sess, examples[0][t:t + 1000], examples[1][t:t + 1000])
+            else:
+                predict = np.concatenate((predict, self.predict_on_batch(sess, examples[0][t:t + 1000],
+                                                                            examples[1][t:t + 1000])), axis=1)
+            t += 1000
+        (predict_raw, predict_proba) = predict
+        auc = roc_auc_score(examples[2], predict_proba, average='macro')
+        predict_tag = np.zeros(predict_raw.shape, dtype='int32')
+        for i in range(len(predict_raw)):
+            for j in range(len(predict_raw[i])):
+                if predict_raw[i, j] >= 0:
+                    predict_tag[i, j] = 1
+        acc = accuracy_score(examples[2], predict_tag)
+        f1 = f1_score(examples[2], predict_tag, average='weighted')
+        print "- Acc: ", acc
+        print "- F1: ", f1
+        print "- AUC: ", auc
+        return auc
+
+    def run_epoch(self, sess, train_examples, dev_examples):
         for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
                 get_minibatches(train_examples, self.config.batch_size)):
             loss, grad_norm = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
             print "loss: ", loss, " grad_norm: ", grad_norm
 
         print "Evaluating on training set"
-        t = 0
-        predict_raw = None
-        # prevent OOM
-        while t < len(train_examples[0]):
-            if predict_raw is None:
-                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 1000], train_examples[1][t:t + 1000])
-            else:
-                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 1000],
-                                                                            train_examples[1][t:t + 1000])), axis=1)
-            t += 1000
-        (predict_raw, predict_proba) = predict_raw
-        auc = roc_auc_score(train_examples[2], predict_proba, average='macro')
-        predict = np.zeros(predict_raw.shape, dtype='int32')
-        for i in range(len(predict_raw)):
-            for j in range(len(predict_raw[i])):
-                if predict_raw[i, j] >= 0:
-                    predict[i, j] = 1
-        training_acc = accuracy_score(train_examples[2], predict)
-        training_f1 = f1_score(train_examples[2], predict, average='weighted')
-        print "- Acc: ", training_acc
-        print "- F1: ", training_f1
-        print "- AUC: ", auc
-        return auc
+        self.batch_evaluation(sess, train_examples)
+        print "Evaluating on dev set"
+        dev_auc = self.batch_evaluation(sess, dev_examples)
+        return dev_auc
 
-    def fit(self, sess, saver, train_examples):
-        best_training_auc = 0
+    def fit(self, sess, saver, train_examples, dev_examples):
+        best_dev_auc = 0
         for epoch in range(self.config.n_epochs):
             print "Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs)
-            training_auc = self.run_epoch(sess, train_examples)
-            if training_auc >= best_training_auc:
-                best_training_auc = training_auc
+            dev_auc = self.run_epoch(sess, train_examples, dev_examples)
+            if dev_auc >= best_dev_auc:
+                best_dev_auc = dev_auc
                 if saver:
                     print '-' * 80
-                    print "New best training auc! Saving model in " + self.model_path
+                    print "New best dev auc! Saving model in " + self.model_path
                     # 只存数据，不保存网络结构，否则model文件会非常大
                     saver.save(sess, self.model_path, write_meta_graph=False)
                     print '-' * 80
@@ -449,9 +496,8 @@ if __name__ == "__main__":
     sys.stderr = error
     sys.stdout = info
 
-    training_set = os.path.join("train.csv")
     test_set = os.path.join("test.csv")
-    experiment(training_set, test_set, model_dir, timestamp)
+    experiment(10, test_set, model_dir, timestamp)
 
     error.close()
     info.close()
