@@ -50,8 +50,7 @@ def normalize(text):
     text = map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text))
     return text
 
-
-def cnn_training(input_path_training):
+def experiment(input_path_training, input_path_test, model_dir, timestamp):
     print 80 * "="
     print "INITIALIZING"
     print 80 * "="
@@ -63,7 +62,6 @@ def cnn_training(input_path_training):
     inputs_ret = []
     labels_ret = []
     mask_ret = []
-
     df = pd.read_csv(input_path_training)
     term = 0
     for index, row in df.iterrows():
@@ -91,10 +89,10 @@ def cnn_training(input_path_training):
             row['obscene'],
             row['threat'],
             row['insult'],
-            row['identity_hate']
+            row['identity_hate'],
         ])
         # term += 1
-        # if term > 250: break
+        # if term > 80: break
     training_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
     print "Finish loading data"
 
@@ -103,9 +101,7 @@ def cnn_training(input_path_training):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model_dir = os.path.join(os.path.abspath('.'), get_timestamp())
-        mkdir_p(model_dir)
-        model = NBT_CNNModel(config, embeddings_matrix, os.path.join(model_dir, get_timestamp() + ".model"))
+        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -115,8 +111,8 @@ def cnn_training(input_path_training):
         saver = tf.train.Saver(tf.trainable_variables())
 
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
+            # writer = tf.summary.FileWriter("logs/", session.graph)
             session.run(init)
-
             print 80 * "="
             print "TRAINING"
             print 80 * "="
@@ -124,6 +120,50 @@ def cnn_training(input_path_training):
             model.fit(session, saver, training_set)
             print "took {:.2f} seconds\n".format(time.time() - start)
             print "Done!"
+
+            inputs_ret = []
+            mask_ret = []
+            df = pd.read_csv(input_path_test)
+            for index, row in df.iterrows():
+                sentence = normalize(row['comment_text'].decode('utf-8'))
+
+                # mask
+                length = len(sentence) if len(sentence) < MAX_SEQUENCE_LENGTH else MAX_SEQUENCE_LENGTH
+                mask = [True] * length + [False] * (MAX_SEQUENCE_LENGTH - length)
+                mask_ret.append(mask)
+
+                # input
+                x = {}
+                x['ws'] = [0] * MAX_SEQUENCE_LENGTH
+                for i, item in [('ws', sentence)]:
+                    # 超过最大长度则截断
+                    for k, v in enumerate(item[:MAX_SEQUENCE_LENGTH]):
+                        if dict[i].has_key(v):
+                            x[i][k] = dict[i][v]
+                x_flat = [x['ws']]
+                inputs_ret.append(x_flat)
+            test_set = [np.asarray(inputs_ret), np.asarray(mask_ret)]
+            print "Finish loading test data"
+
+            t = 0
+            predict_raw = None
+            # prevent OOM
+            while t < len(test_set[0]):
+                if predict_raw is None:
+                    predict_raw = model.predict_on_batch(session, test_set[0][t:t + 1000],
+                                                        test_set[1][t:t + 1000])
+                else:
+                    predict_raw = np.concatenate(
+                        (predict_raw, model.predict_on_batch(session, test_set[0][t:t + 1000],
+                                                            test_set[1][t:t + 1000])), axis=1)
+                t += 1000
+            (predict_raw, predict_proba) = predict_raw
+            submission = pd.DataFrame.from_dict({'id': df['id']})
+            class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+            for (id, class_name) in class_names.items():
+                submission[class_name] = predict_proba[:, id]
+            submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)
+            print "Finish test"
 
     return 0
 
@@ -157,12 +197,12 @@ class Model(object):
 
     def predict_on_batch(self, sess, inputs_batch, mask_batch):
         feed = self.create_feed_dict(inputs_batch, mask_batch)
-        predictions = sess.run(self.pred, feed_dict=feed)
-        return predictions
+        pred, pred_proba = sess.run([self.pred, self.pred_proba], feed_dict=feed)
+        return pred, pred_proba
 
     def build(self):
         self.add_placeholders()
-        self.pred = self.add_prediction_op()
+        self.pred, self.pred_proba = self.add_prediction_op()
         self.loss = self.add_loss_op(self.pred)
         self.train_op = self.add_training_op(self.loss)
 
@@ -221,7 +261,10 @@ class Config(object):
     batch_size = 32
     n_epochs = 10
     lr = 0.01
-    dropout = 0.9
+    dropout = 0.5
+
+    # open multitask
+    label_num = 6
 
     """
     for NBT-CNN
@@ -236,17 +279,11 @@ class Config(object):
     clip_gradients = True
     max_grad_norm = 5.
 
-
-'''
-Reference: https://arxiv.org/abs/1606.03777
-'''
-
-
-class NBT_CNNModel(Model):
+class LSTM_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, 1, self.config.max_length))
         self.mask_placeholder = tf.placeholder(tf.bool, (None, self.config.max_length))
-        self.labels_placeholder = tf.placeholder(tf.float32, (None, 6))
+        self.labels_placeholder = tf.placeholder(tf.float32, (None, self.config.label_num))
         self.dropout_placeholder = tf.placeholder(tf.float32)
 
     def create_feed_dict(self, inputs_batch, mask_batch, labels_batch=None, dropout=1):
@@ -261,54 +298,55 @@ class NBT_CNNModel(Model):
 
     def add_prediction_op(self):
 
-        word_embeddings = tf.convert_to_tensor(self.pretrained_word_embeddings)
+        # word_embeddings = tf.convert_to_tensor(self.pretrained_word_embeddings)
+        word_embeddings = tf.Variable(self.pretrained_word_embeddings)
         x_words = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder[:, 0, :])
 
         x_raw = [x_words]
         x = tf.concat(x_raw, 2)
 
-        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
-                                                                             initializer=tf.contrib.layers.xavier_initializer()),
-                                                     output_keep_prob=self.dropout_placeholder)
-        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
-                                                                             initializer=tf.contrib.layers.xavier_initializer()),
-                                                     output_keep_prob=self.dropout_placeholder)
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
-        h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
-
-        pooled_outputs = []
-        for i, filter_size in enumerate(self.config.filter_sizes):
-            with tf.variable_scope("conv-maxpool-%s" % filter_size):
-                # Convolution Layer
-                filter_shape = [filter_size, self.config.hidden_size, 1, self.config.num_filters]
-
-                W = tf.get_variable('W', filter_shape,
-                                    tf.float32, tf.contrib.layers.xavier_initializer())
-                b1 = tf.get_variable('b1', (self.config.num_filters,),
-                                     tf.float32, tf.contrib.layers.xavier_initializer())
-                conv = tf.nn.conv2d(
-                    h_lstm,
-                    W,
-                    strides=[1, 1, 1, 1],
-                    padding="VALID")
-                # Apply nonlinearity
-                h = tf.nn.relu(tf.nn.bias_add(conv, b1))
-                # Max-pooling over the outputs
-                pooled = tf.nn.max_pool(
-                    h,
-                    ksize=[1, self.config.max_length - filter_size + 1, 1, 1],
-                    strides=[1, 1, 1, 1],
-                    padding='VALID')
-                pooled_outputs.append(pooled)
-
-        # Combine all the pooled features
-        h_pool = tf.reduce_sum(pooled_outputs, 0)
-        h_pool_flat = tf.reshape(h_pool, [-1, self.config.num_filters])
-        h_drop = tf.nn.dropout(h_pool_flat, self.dropout_placeholder)
-
         preds = []
-        for i in range(6):
+        for i in range(self.config.label_num):
             with tf.variable_scope("y-%s" % i):
+                lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
+                                                                                     initializer=tf.contrib.layers.xavier_initializer()),
+                                                             output_keep_prob=self.dropout_placeholder)
+                lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
+                                                                                     initializer=tf.contrib.layers.xavier_initializer()),
+                                                             output_keep_prob=self.dropout_placeholder)
+                outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
+                h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
+
+                pooled_outputs = []
+                for i, filter_size in enumerate(self.config.filter_sizes):
+                    with tf.variable_scope("conv-maxpool-%s" % filter_size):
+                        # Convolution Layer
+                        filter_shape = [filter_size, self.config.hidden_size, 1, self.config.num_filters]
+
+                        W = tf.get_variable('W', filter_shape,
+                                            tf.float32, tf.contrib.layers.xavier_initializer())
+                        b1 = tf.get_variable('b1', (self.config.num_filters,),
+                                             tf.float32, tf.contrib.layers.xavier_initializer())
+                        conv = tf.nn.conv2d(
+                            h_lstm,
+                            W,
+                            strides=[1, 1, 1, 1],
+                            padding="VALID")
+                        # Apply nonlinearity
+                        h = tf.nn.relu(tf.nn.bias_add(conv, b1))
+                        # Max-pooling over the outputs
+                        pooled = tf.nn.max_pool(
+                            h,
+                            ksize=[1, self.config.max_length - filter_size + 1, 1, 1],
+                            strides=[1, 1, 1, 1],
+                            padding='VALID')
+                        pooled_outputs.append(pooled)
+
+                # Combine all the pooled features
+                h_pool = tf.reduce_sum(pooled_outputs, 0)
+                h_pool_flat = tf.reshape(h_pool, [-1, self.config.num_filters])
+                h_drop = tf.nn.dropout(h_pool_flat, self.dropout_placeholder)
+
                 U = tf.get_variable('U', (self.config.num_filters, 1),
                                     tf.float32, tf.contrib.layers.xavier_initializer())
                 b2 = tf.get_variable('b2', (1,),
@@ -316,30 +354,44 @@ class NBT_CNNModel(Model):
 
                 pred = tf.matmul(h_drop, U) + b2
                 preds.append(pred)
-        preds = tf.reshape(preds, [-1, 6])
-        return preds
+        preds = tf.concat(preds, 1)
+        preds_proba = tf.nn.sigmoid(preds)
+        return preds, preds_proba
 
     def add_loss_op(self, preds):
+        '''
         loss = 0
-        for i in range(6):
+        for i in range(self.config.label_num):
             loss += tf.reduce_mean(
                 tf.nn.sigmoid_cross_entropy_with_logits(logits=preds[:, i], labels=self.labels_placeholder[:, i]))
         return loss / 6
+        '''
+        return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=preds, labels=self.labels_placeholder))
 
     def add_training_op(self, loss):
-        train_op = tf.train.AdamOptimizer(self.config.lr).minimize(loss)
+        optimizer = tf.train.AdamOptimizer(self.config.lr)
+
+        grad_var = optimizer.compute_gradients(loss)
+        grad = [i[0] for i in grad_var]
+        var = [i[1] for i in grad_var]
+
+        self.grad_norm = tf.global_norm(grad)
+        if self.config.clip_gradients:
+            grad, self.grad_norm = tf.clip_by_global_norm(grad, self.config.max_grad_norm)
+
+        train_op = optimizer.apply_gradients(zip(grad, var))
         return train_op
 
     def train_on_batch(self, sess, inputs_batch, mask_batch, labels_batch):
         feed = self.create_feed_dict(inputs_batch, mask_batch, labels_batch=labels_batch, dropout=self.config.dropout)
-        _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
-        return loss
+        _, loss, grad_norm = sess.run([self.train_op, self.loss, self.grad_norm], feed_dict=feed)
+        return loss, grad_norm
 
     def run_epoch(self, sess, train_examples):
         for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
                 get_minibatches(train_examples, self.config.batch_size)):
-            loss = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
-            print "loss: ", loss
+            loss, grad_norm = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
+            print "loss: ", loss, " grad_norm: ", grad_norm
 
         print "Evaluating on training set"
         t = 0
@@ -350,9 +402,10 @@ class NBT_CNNModel(Model):
                 predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 1000], train_examples[1][t:t + 1000])
             else:
                 predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 1000],
-                                                                            train_examples[1][t:t + 1000])), axis=0)
+                                                                            train_examples[1][t:t + 1000])), axis=1)
             t += 1000
-        auc = roc_auc_score(train_examples[2], predict_raw, average='macro')
+        (predict_raw, predict_proba) = predict_raw
+        auc = roc_auc_score(train_examples[2], predict_proba, average='macro')
         predict = np.zeros(predict_raw.shape, dtype='int32')
         for i in range(len(predict_raw)):
             for j in range(len(predict_raw[i])):
@@ -387,5 +440,18 @@ class NBT_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
+    timestamp = get_timestamp()
+    import sys
+    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
+    mkdir_p(model_dir)
+    error = open(os.path.join(model_dir, sys.argv[1] + '_error_' + timestamp + '.log'), 'w+')
+    info = open(os.path.join(model_dir, sys.argv[1] + '_info_' + timestamp + '.log'), 'w+')
+    sys.stderr = error
+    sys.stdout = info
+
     training_set = os.path.join("train.csv")
-    cnn_training(training_set)
+    test_set = os.path.join("test.csv")
+    experiment(training_set, test_set, model_dir, timestamp)
+
+    error.close()
+    info.close()
