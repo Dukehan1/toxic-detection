@@ -331,11 +331,11 @@ class NBT_CNNModel(Model):
         predict_raw = None
         while t < len(train_examples[0]):
             if predict_raw is None:
-                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 10000], train_examples[1][t:t + 10000])
+                predict_raw = self.predict_on_batch(sess, train_examples[0][t:t + 1000], train_examples[1][t:t + 1000])
             else:
-                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 10000],
-                                                                            train_examples[1][t:t + 10000])), axis=0)
-            t += 10000
+                predict_raw = np.concatenate((predict_raw, self.predict_on_batch(sess, train_examples[0][t:t + 1000],
+                                                                            train_examples[1][t:t + 1000])), axis=0)
+            t += 1000
         auc = roc_auc_score(train_examples[2], predict_raw, average='macro')
         '''
         predict = np.zeros(predict_raw.shape, dtype='int32')
