@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-MAX_SEQUENCE_LENGTH = 300
+MAX_SEQUENCE_LENGTH = 400
 EMBEDDING_DIM = 200
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
 
@@ -378,19 +378,24 @@ class LSTM_CNNModel(Model):
                         # Apply nonlinearity
                         h = tf.nn.relu(tf.nn.bias_add(conv, b1))
                         # Max-pooling over the outputs
-                        pooled = tf.nn.max_pool(
+                        pooled_max = tf.nn.max_pool(
                             h,
                             ksize=[1, self.config.max_length - filter_size + 1, 1, 1],
                             strides=[1, 1, 1, 1],
                             padding='VALID')
-                        pooled_outputs.append(pooled)
+                        pooled_avg = tf.nn.avg_pool(
+                            h,
+                            ksize=[1, self.config.max_length - filter_size + 1, 1, 1],
+                            strides=[1, 1, 1, 1],
+                            padding='VALID')
+                        pooled_outputs.append(tf.concat([pooled_avg, pooled_max], 3))
 
                 # Combine all the pooled features
                 h_pool = tf.reduce_sum(pooled_outputs, 0)
-                h_pool_flat = tf.reshape(h_pool, [-1, self.config.num_filters])
+                h_pool_flat = tf.reshape(h_pool, [-1, self.config.num_filters * 2])
                 h_drop = tf.nn.dropout(h_pool_flat, self.dropout_placeholder)
 
-                U = tf.get_variable('U', (self.config.num_filters, 1),
+                U = tf.get_variable('U', (self.config.num_filters * 2, 1),
                                     tf.float32, tf.contrib.layers.xavier_initializer())
                 b2 = tf.get_variable('b2', (1,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
@@ -453,19 +458,19 @@ class LSTM_CNNModel(Model):
         print "- Acc: ", acc
         print "- F1: ", f1
         print "- AUC: ", auc
-        return auc
+        return acc
 
     def evaluation(self, sess, saver, train_examples, dev_examples):
         print "Evaluating on training set"
         self.batch_evaluation(sess, train_examples)
         print "Evaluating on dev set"
-        dev_auc = self.batch_evaluation(sess, dev_examples)
+        dev_acc = self.batch_evaluation(sess, dev_examples)
 
-        if dev_auc >= self.best_dev_auc:
-            self.best_dev_auc = dev_auc
+        if dev_acc >= self.best_dev_acc:
+            self.best_dev_acc = dev_acc
             if saver:
                 print '-' * 80
-                print "New best dev auc! Saving model in " + self.model_path
+                print "New best dev acc! Saving model in " + self.model_path
                 # 只存数据，不保存网络结构，否则model文件会非常大
                 saver.save(sess, self.model_path, write_meta_graph=False)
                 print '-' * 80
@@ -486,7 +491,7 @@ class LSTM_CNNModel(Model):
         self.pretrained_word_embeddings = pretrained_word_embeddings
         self.config = config
         self.model_path = model_path
-        self.best_dev_auc = 0
+        self.best_dev_acc = 0
         self.build()
 
 if __name__ == "__main__":
