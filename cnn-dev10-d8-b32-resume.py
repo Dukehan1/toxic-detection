@@ -145,7 +145,6 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
         model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
-        init = tf.global_variables_initializer()
         # If you are using an old version of TensorFlow, you may have to use
         # this initializer instead.
         # init = tf.initialize_all_variables()
@@ -153,7 +152,8 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
 
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
-            session.run(init)
+            saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
+
             print 80 * "="
             print "TRAINING"
             print 80 * "="
@@ -299,10 +299,10 @@ class Config(object):
     """
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
-    batch_size = 128
-    n_epochs = 5
+    batch_size = 32
+    n_epochs = 2
     lr = 0.01
-    dropout = 0.5
+    dropout = 0.8
 
     # open multitask
     label_num = 6
@@ -453,41 +453,42 @@ class LSTM_CNNModel(Model):
         print "- AUC: ", auc
         return auc
 
-    def run_epoch(self, sess, train_examples, dev_examples):
-        for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
-                get_minibatches(train_examples, self.config.batch_size)):
-            loss, grad_norm = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
-            print "loss: ", loss, " grad_norm: ", grad_norm
-
+    def evaluation(self, sess, saver, train_examples, dev_examples):
         print "Evaluating on training set"
         self.batch_evaluation(sess, train_examples)
         print "Evaluating on dev set"
         dev_auc = self.batch_evaluation(sess, dev_examples)
-        return dev_auc
+
+        if dev_auc >= self.best_dev_auc:
+            self.best_dev_auc = dev_auc
+            if saver:
+                print '-' * 80
+                print "New best dev auc! Saving model in " + self.model_path
+                # 只存数据，不保存网络结构，否则model文件会非常大
+                saver.save(sess, self.model_path, write_meta_graph=False)
+                print '-' * 80
+        print
 
     def fit(self, sess, saver, train_examples, dev_examples):
-        best_dev_auc = 0
         for epoch in range(self.config.n_epochs):
             print "Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs)
-            dev_auc = self.run_epoch(sess, train_examples, dev_examples)
-            if dev_auc >= best_dev_auc:
-                best_dev_auc = dev_auc
-                if saver:
-                    print '-' * 80
-                    print "New best dev auc! Saving model in " + self.model_path
-                    # 只存数据，不保存网络结构，否则model文件会非常大
-                    saver.save(sess, self.model_path, write_meta_graph=False)
-                    print '-' * 80
-            print
+            for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
+                    get_minibatches(train_examples, self.config.batch_size)):
+                if i % 400 == 0:
+                    self.evaluation(sess, saver, train_examples, dev_examples)
+                loss, grad_norm = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
+                print "loss: ", loss, " grad_norm: ", grad_norm
+            self.evaluation(sess, saver, train_examples, dev_examples)
 
     def __init__(self, config, pretrained_word_embeddings, model_path):
         self.pretrained_word_embeddings = pretrained_word_embeddings
         self.config = config
         self.model_path = model_path
+        self.best_dev_auc = 0
         self.build()
 
 if __name__ == "__main__":
-    timestamp = get_timestamp()
+    timestamp = ''
     import sys
     model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
     mkdir_p(model_dir)
