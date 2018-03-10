@@ -145,6 +145,7 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
         model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
+        init = tf.global_variables_initializer()
         # If you are using an old version of TensorFlow, you may have to use
         # this initializer instead.
         # init = tf.initialize_all_variables()
@@ -152,6 +153,7 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
 
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
+            session.run(init)
             saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
 
             print 80 * "="
