@@ -488,9 +488,9 @@ class LSTM_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
-    timestamp = ''
+    timestamp = '20160702153723590'
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
+    model_dir = os.path.join(os.path.abspath('.'), 'dev10-e5-b128_20160702153723590')
     mkdir_p(model_dir)
 
     test_set = os.path.join("test.csv")
