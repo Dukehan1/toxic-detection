@@ -396,7 +396,7 @@ class LSTM_CNNModel(Model):
             print "Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs)
             for i, (inputs_batch, mask_batch, labels_batch) in enumerate(
                     get_minibatches(train_examples, self.config.batch_size)):
-                if i % 400 == 0:
+                if i % 200 == 0:
                     self.evaluation(sess, saver, train_examples, dev_examples)
                 loss, grad_norm = self.train_on_batch(sess, inputs_batch, mask_batch, labels_batch)
                 print "loss: ", loss, " grad_norm: ", grad_norm
