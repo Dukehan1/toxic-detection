@@ -15,6 +15,8 @@ MAX_SEQUENCE_LENGTH = 400
 EMBEDDING_DIM = 200
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
 
+INFERENCE_BATCH_SIZE = 400
+
 def init_embedding():
     # build embedding dict
     print "Loading pretrained embeddings...",
@@ -108,13 +110,13 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
             # prevent OOM
             while t < len(test_set[0]):
                 if predict_raw is None:
-                    predict_raw = model.predict_on_batch(session, test_set[0][t:t + 1000],
-                                                        test_set[1][t:t + 1000])
+                    predict_raw = model.predict_on_batch(session, test_set[0][t:t + INFERENCE_BATCH_SIZE],
+                                                        test_set[1][t:t + INFERENCE_BATCH_SIZE])
                 else:
                     predict_raw = np.concatenate(
-                        (predict_raw, model.predict_on_batch(session, test_set[0][t:t + 1000],
-                                                            test_set[1][t:t + 1000])), axis=1)
-                t += 1000
+                        (predict_raw, model.predict_on_batch(session, test_set[0][t:t + INFERENCE_BATCH_SIZE],
+                                                            test_set[1][t:t + INFERENCE_BATCH_SIZE])), axis=1)
+                t += INFERENCE_BATCH_SIZE
             (predict_raw, predict_proba) = predict_raw
             submission = pd.DataFrame.from_dict({'id': df['id']})
             class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
@@ -356,11 +358,11 @@ class LSTM_CNNModel(Model):
         # prevent OOM
         while t < len(examples[0]):
             if predict is None:
-                predict = self.predict_on_batch(sess, examples[0][t:t + 1000], examples[1][t:t + 1000])
+                predict = self.predict_on_batch(sess, examples[0][t:t + INFERENCE_BATCH_SIZE], examples[1][t:t + INFERENCE_BATCH_SIZE])
             else:
-                predict = np.concatenate((predict, self.predict_on_batch(sess, examples[0][t:t + 1000],
-                                                                            examples[1][t:t + 1000])), axis=1)
-            t += 1000
+                predict = np.concatenate((predict, self.predict_on_batch(sess, examples[0][t:t + INFERENCE_BATCH_SIZE],
+                                                                            examples[1][t:t + INFERENCE_BATCH_SIZE])), axis=1)
+            t += INFERENCE_BATCH_SIZE
         (predict_raw, predict_proba) = predict
         auc = roc_auc_score(examples[2], predict_proba, average='macro')
         predict_tag = np.zeros(predict_raw.shape, dtype='int32')
