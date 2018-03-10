@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-MAX_SEQUENCE_LENGTH = 200
+MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 200
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
 
@@ -25,9 +25,10 @@ def init_embedding():
         sp = line.strip().split()
         if k == 0:
             embeddings_matrix = np.zeros((int(sp[0]) + 1, EMBEDDING_DIM), dtype='float32')
+            embeddings_matrix[0] = np.random.uniform(-1, 1, EMBEDDING_DIM)
         else:
             ws_to_idx[sp[0].decode('utf-8')] = k
-            embeddings_matrix[k] = [float(x) for x in sp[1:]]
+            embeddings_matrix[k] = np.asarray([float(x) for x in sp[1:]])
     print "took {:.2f} seconds\n".format(time.time() - start)
     return ws_to_idx, embeddings_matrix
 
@@ -154,7 +155,6 @@ def experiment(dev_id, input_path_test, model_dir, timestamp):
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
             session.run(init)
-            saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
 
             print 80 * "="
             print "TRAINING"
@@ -301,10 +301,10 @@ class Config(object):
     """
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
-    batch_size = 32
+    batch_size = 128
     n_epochs = 2
     lr = 0.01
-    dropout = 0.8
+    dropout = 1
 
     # open multitask
     label_num = 6
@@ -342,7 +342,7 @@ class LSTM_CNNModel(Model):
     def add_prediction_op(self):
 
         # word_embeddings = tf.convert_to_tensor(self.pretrained_word_embeddings)
-        word_embeddings = tf.Variable(self.pretrained_word_embeddings)
+        word_embeddings = tf.Variable(self.pretrained_word_embeddings, dtype=tf.float32)
         x_words = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder[:, 0, :])
 
         x_raw = [x_words]
@@ -490,9 +490,9 @@ class LSTM_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
-    timestamp = '20160702153723590'
+    timestamp = get_timestamp()
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), 'dev10-e5-b128_20160702153723590')
+    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
     mkdir_p(model_dir)
 
     test_set = os.path.join("test.csv")
