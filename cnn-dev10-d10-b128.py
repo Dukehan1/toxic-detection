@@ -463,8 +463,8 @@ class LSTM_CNNModel(Model):
         return acc
 
     def evaluation(self, sess, saver, train_examples, dev_examples):
-        print "Evaluating on training set"
-        self.batch_evaluation(sess, train_examples)
+        # print "Evaluating on training set"
+        # self.batch_evaluation(sess, train_examples)
         print "Evaluating on dev set"
         dev_acc = self.batch_evaluation(sess, dev_examples)
 
