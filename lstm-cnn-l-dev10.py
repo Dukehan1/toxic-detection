@@ -25,15 +25,12 @@ def init_embedding():
     print "Loading pretrained embeddings...",
     start = time.time()
     ws_to_idx = {}
-    embeddings_matrix = None
+    embeddings_matrix = np.zeros((1193514 + 1, EMBEDDING_DIM), dtype='float32')
+    embeddings_matrix[0] = np.random.uniform(-1, 1, EMBEDDING_DIM)
     for k, line in enumerate(open(VECTOR_DIR).readlines()):
         sp = line.strip().split()
-        if k == 0:
-            embeddings_matrix = np.zeros((int(sp[0]) + 1, EMBEDDING_DIM), dtype='float32')
-            embeddings_matrix[0] = np.random.uniform(-1, 1, EMBEDDING_DIM)
-        else:
-            ws_to_idx[sp[0].decode('utf-8')] = k
-            embeddings_matrix[k] = np.asarray([float(x) for x in sp[1:]])
+        ws_to_idx[sp[0].decode('utf-8')] = k + 1
+        embeddings_matrix[k + 1] = np.asarray([float(x) for x in sp[1:]])
     print "took {:.2f} seconds\n".format(time.time() - start)
     return ws_to_idx, embeddings_matrix
 
