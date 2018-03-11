@@ -8,11 +8,12 @@ import tensorflow as tf
 import numpy as np
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
+from sklearn.cross_validation import train_test_split
 from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
-MAX_SEQUENCE_LENGTH = 200
+MAX_SEQUENCE_LENGTH = 150
 EMBEDDING_DIM = 200
 MAX_FEATURES = 100000
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
@@ -53,6 +54,10 @@ def experiment(dev_id, model_dir, timestamp):
     y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
+    '''
+    X_train, X_dev, y_train, y_dev = train_test_split(X_train, y_train, train_size=0.9, random_state=233)
+    print "Finish loading dev data"
+    '''
     df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
     # df = df[:200]
     X_dev = df["comment_text"].fillna("fillna").values
@@ -63,6 +68,7 @@ def experiment(dev_id, model_dir, timestamp):
     # df = df[:200]
     X_test = df["comment_text"].fillna("fillna").values
     print "Finish loading test data"
+
 
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
     tokenizer.fit_on_texts(list(X_train) + list(X_dev) + list(X_test))
@@ -224,7 +230,7 @@ class Config(object):
     embed_size = EMBEDDING_DIM
     batch_size = 128
     n_epochs = 10
-    lr = 0.01
+    lr = 0.001
     dropout = 1
 
     # open multitask
@@ -234,12 +240,12 @@ class Config(object):
     for CNN
     """
     filter_sizes = [3]
-    num_filters = 128
+    num_filters = 64
 
     """
     for LSTM
     """
-    hidden_size = 256
+    hidden_size = 128
     clip_gradients = True
     max_grad_norm = 5.
 
@@ -264,11 +270,9 @@ class LSTM_CNNModel(Model):
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
-        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
-                                                                             initializer=tf.contrib.layers.xavier_initializer()),
+        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
-                                                                             initializer=tf.contrib.layers.xavier_initializer()),
+        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
         outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
         h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
@@ -366,19 +370,19 @@ class LSTM_CNNModel(Model):
         print "- Acc: ", acc
         print "- F1: ", f1
         print "- AUC: ", auc
-        return acc
+        return auc
 
     def evaluation(self, sess, saver, train_examples, dev_examples):
         print "Evaluating on training set"
         self.batch_evaluation(sess, train_examples)
         print "Evaluating on dev set"
-        dev_acc = self.batch_evaluation(sess, dev_examples)
+        dev_auc = self.batch_evaluation(sess, dev_examples)
 
-        if dev_acc >= self.best_dev_acc:
-            self.best_dev_acc = dev_acc
+        if dev_auc > self.best_dev_auc:
+            self.best_dev_auc = dev_auc
             if saver:
                 print '-' * 80
-                print "New best dev acc! Saving model in " + self.model_path
+                print "New best dev auc! Saving model in " + self.model_path
                 saver.save(sess, self.model_path)
                 print '-' * 80
         print
@@ -401,10 +405,16 @@ class LSTM_CNNModel(Model):
         self.pretrained_word_embeddings = pretrained_word_embeddings
         self.config = config
         self.model_path = model_path
-        self.best_dev_acc = 0
+        self.best_dev_auc = 0
         self.build()
 
 if __name__ == "__main__":
+    '''
+    timestamp = '20180311135230454'
+    import sys
+    model_dir = os.path.join('dev10-d10-b128_20180311135230454')
+    mkdir_p(model_dir)
+    '''
     timestamp = get_timestamp()
     import sys
     model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
