@@ -77,7 +77,7 @@ def experiment(dev_id, model_dir, timestamp):
 
     word_index = tokenizer.word_index
     valid_features = min(MAX_FEATURES, len(word_index) + 1)
-    embeddings_matrix = np.zeros((valid_features, EMBEDDING_DIM))
+    embeddings_matrix = np.random.uniform(-1, 1, (valid_features, EMBEDDING_DIM))
     for word, i in word_index.items():
         if i >= MAX_FEATURES: continue
         embedding_vector = embeddings_dict.get(word)
@@ -231,15 +231,15 @@ class Config(object):
     label_num = 6
 
     """
-    for NBT-CNN
+    for CNN
     """
-    filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    num_filters = 100
+    filter_sizes = [3]
+    num_filters = 128
 
     """
     for LSTM
     """
-    hidden_size = 200
+    hidden_size = 256
     clip_gradients = True
     max_grad_norm = 5.
 
@@ -262,6 +262,7 @@ class LSTM_CNNModel(Model):
 
         word_embeddings = tf.Variable(self.pretrained_word_embeddings, dtype=tf.float32)
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
+        x = tf.nn.dropout(x, self.dropout_placeholder)
 
         lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2,
                                                                              initializer=tf.contrib.layers.xavier_initializer()),
@@ -305,7 +306,6 @@ class LSTM_CNNModel(Model):
         # Combine all the pooled features
         h_pool = tf.reduce_sum(pooled_outputs, 0)
         h_pool_flat = tf.reshape(h_pool, [-1, self.config.num_filters * 2])
-        h_drop = tf.nn.dropout(h_pool_flat, self.dropout_placeholder)
 
         preds = []
         for i in range(self.config.label_num):
@@ -316,7 +316,7 @@ class LSTM_CNNModel(Model):
                 b2 = tf.get_variable('b2', (1,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
 
-                pred = tf.matmul(h_drop, U) + b2
+                pred = tf.matmul(h_pool_flat, U) + b2
                 preds.append(pred)
         preds = tf.concat(preds, 1)
         preds_proba = tf.nn.sigmoid(preds)
@@ -385,14 +385,17 @@ class LSTM_CNNModel(Model):
 
     def fit(self, sess, saver, train_examples, dev_examples):
         for epoch in range(self.config.n_epochs):
+            epoch_loss = 0
             print "Epoch {:} out of {:}".format(epoch + 1, self.config.n_epochs)
             for i, (inputs_batch, labels_batch) in enumerate(
                     get_minibatches(train_examples, self.config.batch_size)):
                 if i % 200 == 0:
                     self.evaluation(sess, saver, train_examples, dev_examples)
                 loss, grad_norm = self.train_on_batch(sess, inputs_batch, labels_batch)
+                epoch_loss += loss
                 print "loss: ", loss, " grad_norm: ", grad_norm
             self.evaluation(sess, saver, train_examples, dev_examples)
+            print "epoch_loss: ", epoch_loss
 
     def __init__(self, config, pretrained_word_embeddings, model_path):
         self.pretrained_word_embeddings = pretrained_word_embeddings

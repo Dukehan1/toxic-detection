@@ -231,7 +231,7 @@ class Config(object):
     label_num = 6
 
     """
-    for NBT-CNN
+    for CNN
     """
     filter_sizes = [3]
     num_filters = 128
