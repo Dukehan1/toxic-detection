@@ -230,7 +230,7 @@ class Config(object):
     embed_size = EMBEDDING_DIM
     batch_size = 128
     n_epochs = 10
-    lr = 0.01
+    lr = 0.001
     dropout = 1
 
     # open multitask
@@ -240,12 +240,12 @@ class Config(object):
     for CNN
     """
     filter_sizes = [3]
-    num_filters = 64
+    num_filters = 128
 
     """
     for LSTM
     """
-    hidden_size = 128
+    hidden_size = 256
     clip_gradients = True
     max_grad_norm = 5.
 
@@ -270,9 +270,9 @@ class LSTM_CNNModel(Model):
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
-        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
         outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
         h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
