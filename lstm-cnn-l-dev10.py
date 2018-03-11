@@ -100,7 +100,7 @@ def experiment(dev_id, model_dir, timestamp):
         ])
         # term += 1
         # if term > 80: break
-    training_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
+    training_set = [np.asarray(inputs_ret), np.asarray(labels_ret)]
     print "Finish loading training data"
 
     inputs_ret = []
@@ -137,7 +137,7 @@ def experiment(dev_id, model_dir, timestamp):
         ])
         # term += 1
         # if term > 200: break
-    dev_set = [np.asarray(inputs_ret), np.asarray(mask_ret), np.asarray(labels_ret)]
+    dev_set = [np.asarray(inputs_ret), np.asarray(labels_ret)]
     print "Finish loading dev data"
 
     config = Config()
@@ -188,7 +188,7 @@ def experiment(dev_id, model_dir, timestamp):
                             x[i][k] = dict[i][v]
                 x_flat = [x['ws']]
                 inputs_ret.append(x_flat)
-            test_set = [np.asarray(inputs_ret), np.asarray(mask_ret)]
+            test_set = [np.asarray(inputs_ret)]
             print "Finish loading test data"
 
             t = 0
