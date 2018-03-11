@@ -402,9 +402,9 @@ class LSTM_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
-    timestamp = get_timestamp()
+    timestamp = '20180311135230454'
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
+    model_dir = os.path.join('dev10-d10-b128_20180311135230454')
     mkdir_p(model_dir)
 
     experiment(10, model_dir, timestamp)
