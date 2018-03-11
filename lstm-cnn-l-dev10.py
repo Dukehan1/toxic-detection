@@ -87,8 +87,7 @@ def experiment(dev_id, model_dir, timestamp):
             for k, v in enumerate(item[:MAX_SEQUENCE_LENGTH]):
                 if dict[i].has_key(v):
                     x[i][k] = dict[i][v]
-        x_flat = [x['ws']]
-        inputs_ret.append(x_flat)
+        inputs_ret.append(x['ws'])
 
         labels_ret.append([
             row['toxic'],
@@ -124,8 +123,7 @@ def experiment(dev_id, model_dir, timestamp):
             for k, v in enumerate(item[:MAX_SEQUENCE_LENGTH]):
                 if dict[i].has_key(v):
                     x[i][k] = dict[i][v]
-        x_flat = [x['ws']]
-        inputs_ret.append(x_flat)
+        inputs_ret.append(x['ws'])
 
         labels_ret.append([
             row['toxic'],
@@ -186,8 +184,7 @@ def experiment(dev_id, model_dir, timestamp):
                     for k, v in enumerate(item[:MAX_SEQUENCE_LENGTH]):
                         if dict[i].has_key(v):
                             x[i][k] = dict[i][v]
-                x_flat = [x['ws']]
-                inputs_ret.append(x_flat)
+                inputs_ret.append(x['ws'])
             test_set = [np.asarray(inputs_ret)]
             print "Finish loading test data"
 
