@@ -46,16 +46,19 @@ def experiment():
         df = pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv'))
         for index, row in df.iterrows():
             row["comment_text"] = normalize(row["comment_text"])
+            row["tb_sentiment"] = TextBlob(row["comment_text"]).sentiment.polarity
         df.to_csv(os.path.join('split', 'sc-train-' + str(i) + '.csv'))
 
     df = pd.read_csv(os.path.join('train.csv'))
     for index, row in df.iterrows():
         row["comment_text"] = normalize(row["comment_text"])
+        row["tb_sentiment"] = TextBlob(row["comment_text"]).sentiment.polarity
     df.to_csv(os.path.join('sc-train.csv'), index=False)
 
     df = pd.read_csv(os.path.join('test.csv'))
     for index, row in df.iterrows():
         row["comment_text"] = normalize(row["comment_text"])
+        row["tb_sentiment"] = TextBlob(row["comment_text"]).sentiment.polarity
     df.to_csv(os.path.join('sc-test.csv'), index=False)
 
     return 0
