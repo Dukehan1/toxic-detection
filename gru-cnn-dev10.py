@@ -13,7 +13,7 @@ from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
-MAX_SEQUENCE_LENGTH = 150
+MAX_SEQUENCE_LENGTH = 200
 EMBEDDING_DIM = 200
 MAX_FEATURES = 100000
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
@@ -94,7 +94,7 @@ def experiment(dev_id, model_dir, timestamp):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
+        model = GRU_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -243,13 +243,13 @@ class Config(object):
     num_filters = 64
 
     """
-    for LSTM
+    for GRU
     """
     hidden_size = 128
     clip_gradients = True
     max_grad_norm = 5.
 
-class LSTM_CNNModel(Model):
+class GRU_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, self.config.max_length))
         self.labels_placeholder = tf.placeholder(tf.float32, (None, self.config.label_num))
@@ -270,12 +270,12 @@ class LSTM_CNNModel(Model):
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
-        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        gru_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        gru_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
-        h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(gru_fw_cell, gru_bw_cell, x, dtype=tf.float32)
+        h_gru = tf.expand_dims(tf.concat(outputs, 2), -1)
 
         pooled_outputs = []
         for i, filter_size in enumerate(self.config.filter_sizes):
@@ -288,7 +288,7 @@ class LSTM_CNNModel(Model):
                 b1 = tf.get_variable('b1', (self.config.num_filters,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
                 conv = tf.nn.conv2d(
-                    h_lstm,
+                    h_gru,
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID")
