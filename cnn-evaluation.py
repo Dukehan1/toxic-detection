@@ -82,7 +82,7 @@ def experiment(dev_id, model_dir, timestamp):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
+        model = GRU_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -389,9 +389,9 @@ class GRU_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
-    timestamp = 'gru-cnn-dev10_20180312062030014'
+    timestamp = '20180312062030014'
     import sys
-    model_dir = os.path.join('gru-cnn-dev10')
+    model_dir = os.path.join('gru-cnn-dev10_20180312062030014')
     mkdir_p(model_dir)
 
     experiment(10, model_dir, timestamp)
