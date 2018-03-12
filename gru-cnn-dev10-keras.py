@@ -112,7 +112,7 @@ def experiment(dev_id, model_dir, timestamp):
     model = get_model()
 
     filepath = os.path.join(model_dir, "weights_base.best.hdf5")
-    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max')
+    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=2, save_best_only=True, mode='max')
     early = EarlyStopping(monitor="val_acc", mode="max", patience=5)
     ra_val = RocAucEvaluation(validation_data=(X_dev, y_dev), interval=1)
     callbacks_list = [ra_val, checkpoint, early]
@@ -122,7 +122,7 @@ def experiment(dev_id, model_dir, timestamp):
     # Loading model weights
     model.load_weights(filepath)
     print('Predicting....')
-    y_test = model.predict(X_test, batch_size=1024, verbose=1)
+    y_test = model.predict(X_test, batch_size=1024, verbose=2)
 
     submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_test
     submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)

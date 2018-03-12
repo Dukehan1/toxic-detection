@@ -231,7 +231,7 @@ class Config(object):
     batch_size = 128
     n_epochs = 4
     lr = 0.001
-    dropout = 0.8
+    dropout = 1
 
     # open multitask
     label_num = 6
@@ -239,13 +239,13 @@ class Config(object):
     """
     for CNN
     """
-    filter_sizes = [3]
-    num_filters = 64
+    filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    num_filters = 100
 
     """
     for GRU
     """
-    hidden_size = 128
+    hidden_size = 200
     clip_gradients = True
     max_grad_norm = 5.
 
