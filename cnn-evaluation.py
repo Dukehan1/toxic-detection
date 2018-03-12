@@ -13,7 +13,7 @@ from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
-MAX_SEQUENCE_LENGTH = 150
+MAX_SEQUENCE_LENGTH = 200
 EMBEDDING_DIM = 200
 MAX_FEATURES = 100000
 VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
@@ -209,7 +209,7 @@ class Config(object):
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
     batch_size = 128
-    n_epochs = 10
+    n_epochs = 4
     lr = 0.001
     dropout = 1
 
@@ -223,13 +223,13 @@ class Config(object):
     num_filters = 64
 
     """
-    for LSTM
+    for GRU
     """
     hidden_size = 128
     clip_gradients = True
     max_grad_norm = 5.
 
-class LSTM_CNNModel(Model):
+class GRU_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, self.config.max_length))
         self.labels_placeholder = tf.placeholder(tf.float32, (None, self.config.label_num))
@@ -250,12 +250,12 @@ class LSTM_CNNModel(Model):
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
-        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        gru_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        gru_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
-        h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(gru_fw_cell, gru_bw_cell, x, dtype=tf.float32)
+        h_gru = tf.expand_dims(tf.concat(outputs, 2), -1)
 
         pooled_outputs = []
         for i, filter_size in enumerate(self.config.filter_sizes):
@@ -268,7 +268,7 @@ class LSTM_CNNModel(Model):
                 b1 = tf.get_variable('b1', (self.config.num_filters,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
                 conv = tf.nn.conv2d(
-                    h_lstm,
+                    h_gru,
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID")
@@ -350,19 +350,19 @@ class LSTM_CNNModel(Model):
         print "- Acc: ", acc
         print "- F1: ", f1
         print "- AUC: ", auc
-        return acc
+        return auc
 
     def evaluation(self, sess, saver, train_examples, dev_examples):
         print "Evaluating on training set"
         self.batch_evaluation(sess, train_examples)
         print "Evaluating on dev set"
-        dev_acc = self.batch_evaluation(sess, dev_examples)
+        dev_auc = self.batch_evaluation(sess, dev_examples)
 
-        if dev_acc >= self.best_dev_acc:
-            self.best_dev_acc = dev_acc
+        if dev_auc > self.best_dev_auc:
+            self.best_dev_auc = dev_auc
             if saver:
                 print '-' * 80
-                print "New best dev acc! Saving model in " + self.model_path
+                print "New best dev auc! Saving model in " + self.model_path
                 saver.save(sess, self.model_path)
                 print '-' * 80
         print
@@ -385,13 +385,13 @@ class LSTM_CNNModel(Model):
         self.pretrained_word_embeddings = pretrained_word_embeddings
         self.config = config
         self.model_path = model_path
-        self.best_dev_acc = 0
+        self.best_dev_auc = 0
         self.build()
 
 if __name__ == "__main__":
-    timestamp = '20160703200312755'
+    timestamp = 'gru-cnn-dev10_20180312062030014'
     import sys
-    model_dir = os.path.join('dev10-d10-b128-change_20160703200312755')
+    model_dir = os.path.join('gru-cnn-dev10')
     mkdir_p(model_dir)
 
     experiment(10, model_dir, timestamp)
