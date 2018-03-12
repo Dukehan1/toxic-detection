@@ -14,9 +14,9 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
 MAX_SEQUENCE_LENGTH = 200
-EMBEDDING_DIM = 200
+EMBEDDING_DIM = 300
 MAX_FEATURES = 100000
-VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
+VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
 
