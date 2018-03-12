@@ -231,7 +231,7 @@ class Config(object):
     batch_size = 128
     n_epochs = 4
     lr = 0.001
-    dropout = 0.5
+    dropout = 0.8
 
     # open multitask
     label_num = 6
