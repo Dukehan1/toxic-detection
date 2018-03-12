@@ -229,7 +229,7 @@ class Config(object):
     max_length = MAX_SEQUENCE_LENGTH
     embed_size = EMBEDDING_DIM
     batch_size = 128
-    n_epochs = 10
+    n_epochs = 4
     lr = 0.001
     dropout = 1
 
