@@ -13,9 +13,9 @@ from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
-MAX_SEQUENCE_LENGTH = 200
+MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 100000
+MAX_FEATURES = 150000
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
