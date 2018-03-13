@@ -15,7 +15,7 @@ from keras.preprocessing import text, sequence
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 160554
+MAX_FEATURES = 140285
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -52,7 +52,7 @@ def experiment(dev_id, model_dir, timestamp):
         df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df = pd.concat(df)
     # df = df[:80]
-    X_train = df["comment_text"].fillna('').values
+    X_train = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
     y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
@@ -62,13 +62,13 @@ def experiment(dev_id, model_dir, timestamp):
     '''
     df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
     # df = df[:200]
-    X_dev = df["comment_text"].fillna('').values
+    X_dev = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
     y_dev = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     df = pd.read_csv(os.path.join('test.csv'))
     # df = df[:200]
-    X_test = df["comment_text"].fillna('').values
+    X_test = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
     print "Finish loading test data"
 
 
@@ -96,7 +96,7 @@ def experiment(dev_id, model_dir, timestamp):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model = GRU_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
+        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -245,13 +245,13 @@ class Config(object):
     num_filters = 100
 
     """
-    for GRU
+    for LSTM
     """
     hidden_size = 200
     clip_gradients = True
     max_grad_norm = 5.
 
-class GRU_CNNModel(Model):
+class LSTM_CNNModel(Model):
     def add_placeholders(self):
         self.inputs_placeholder = tf.placeholder(tf.int32, (None, self.config.max_length))
         self.labels_placeholder = tf.placeholder(tf.float32, (None, self.config.label_num))
@@ -272,12 +272,12 @@ class GRU_CNNModel(Model):
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
-        gru_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        gru_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.GRUCell(self.config.hidden_size / 2),
+        lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.LSTMCell(self.config.hidden_size / 2),
                                                      output_keep_prob=self.dropout_placeholder)
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(gru_fw_cell, gru_bw_cell, x, dtype=tf.float32)
-        h_gru = tf.expand_dims(tf.concat(outputs, 2), -1)
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, x, dtype=tf.float32)
+        h_lstm = tf.expand_dims(tf.concat(outputs, 2), -1)
 
         pooled_outputs = []
         for i, filter_size in enumerate(self.config.filter_sizes):
@@ -290,7 +290,7 @@ class GRU_CNNModel(Model):
                 b1 = tf.get_variable('b1', (self.config.num_filters,),
                                      tf.float32, tf.contrib.layers.xavier_initializer())
                 conv = tf.nn.conv2d(
-                    h_gru,
+                    h_lstm,
                     W,
                     strides=[1, 1, 1, 1],
                     padding="VALID")
