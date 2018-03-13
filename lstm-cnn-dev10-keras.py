@@ -6,21 +6,20 @@ from datetime import datetime
 import numpy as np
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
-from sklearn.cross_validation import train_test_split
 from sklearn.feature_extraction.text import strip_accents_ascii
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.metrics import roc_auc_score
 from keras.models import Model
-from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, GRU, Bidirectional, \
-    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D
+from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, Bidirectional, \
+    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D, LSTM
 from keras.preprocessing import text, sequence
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping,ModelCheckpoint
 from keras.callbacks import Callback
 
-MAX_SEQUENCE_LENGTH = 200
-EMBEDDING_DIM = 200
-MAX_FEATURES = 100000
-VECTOR_DIR = os.path.join('glove.twitter.27B.200d.txt')
+MAX_SEQUENCE_LENGTH = 300
+EMBEDDING_DIM = 300
+MAX_FEATURES = 150000
+VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
 
@@ -39,8 +38,10 @@ def mkdir_p(path):
             raise
 
 def normalize(text):
-    text = strip_accents_ascii(text)
-    text = map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text))
+    text = strip_accents_ascii(text.decode('utf-8'))
+    text = text.encode('utf-8')
+    text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
+    # text = str(TextBlob(text).correct())
     return text
 
 def experiment(dev_id, model_dir, timestamp):
@@ -54,7 +55,7 @@ def experiment(dev_id, model_dir, timestamp):
         df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df = pd.concat(df)
     # df = df[:80]
-    X_train = df["comment_text"].fillna("fillna").values
+    X_train = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
     y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
@@ -64,13 +65,13 @@ def experiment(dev_id, model_dir, timestamp):
     '''
     df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
     # df = df[:200]
-    X_dev = df["comment_text"].fillna("fillna").values
+    X_dev = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
     y_dev = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     submission = pd.read_csv(os.path.join('test.csv'))
     # df = df[:200]
-    X_test = submission["comment_text"].fillna("fillna").values
+    X_test = map(lambda x: normalize(x), submission["comment_text"].fillna('').values)
     print "Finish loading test data"
 
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
@@ -95,9 +96,9 @@ def experiment(dev_id, model_dir, timestamp):
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
         x = Embedding(valid_features, EMBEDDING_DIM, weights=[embeddings_matrix])(inp)
-        x = SpatialDropout1D(0.2)(x)
-        x = Bidirectional(GRU(128, return_sequences=True, dropout=0.1, recurrent_dropout=0.1))(x)
-        x = Conv1D(64, kernel_size=3, padding="valid", kernel_initializer="glorot_uniform")(x)
+        x = SpatialDropout1D(0.5)(x)
+        x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
+        x = Conv1D(100, kernel_size=3, padding="valid", kernel_initializer="glorot_uniform")(x)
         avg_pool = GlobalAveragePooling1D()(x)
         max_pool = GlobalMaxPooling1D()(x)
         conc = concatenate([avg_pool, max_pool])
