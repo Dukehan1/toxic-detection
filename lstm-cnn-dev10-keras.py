@@ -125,7 +125,10 @@ def experiment(dev_id, model_dir, timestamp):
     print('Predicting....')
     y_test = model.predict(X_test, batch_size=1024, verbose=2)
 
-    submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_test
+    submission = pd.DataFrame.from_dict({'id': df['id']})
+    class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+    for (id, class_name) in class_names.items():
+        submission[class_name] = y_test[:, id]
     submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)
     print "Finish test"
 
