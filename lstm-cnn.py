@@ -15,7 +15,7 @@ from keras.preprocessing import text, sequence
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 140285
+MAX_FEATURES = 160554
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -52,7 +52,7 @@ def experiment(dev_id, model_dir, timestamp):
         df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df = pd.concat(df)
     # df = df[:80]
-    X_train = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
+    X_train = df["comment_text"].fillna('').values
     y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
@@ -62,13 +62,13 @@ def experiment(dev_id, model_dir, timestamp):
     '''
     df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
     # df = df[:200]
-    X_dev = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
+    X_dev = df["comment_text"].fillna('').values
     y_dev = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     df = pd.read_csv(os.path.join('test.csv'))
     # df = df[:200]
-    X_test = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
+    X_test = df["comment_text"].fillna('').values
     print "Finish loading test data"
 
 
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     '''
     timestamp = get_timestamp()
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
+    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_' + sys.argv[1])
     mkdir_p(model_dir)
 
-    experiment(10, model_dir, timestamp)
+    experiment(int(sys.argv[1]), model_dir, timestamp)
