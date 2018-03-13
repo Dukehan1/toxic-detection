@@ -1,0 +1,5 @@
+.idea
+split
+rawsplit
+glove.840B.300d.txt
+*.csv
