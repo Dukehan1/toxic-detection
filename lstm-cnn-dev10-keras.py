@@ -49,36 +49,32 @@ def experiment(dev_id, model_dir, timestamp):
     print "INITIALIZING"
     print 80 * "="
 
-    df = []
-    df_idx = filter(lambda x: x != dev_id, range(1, 11))
-    for i in df_idx:
-        df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
-    df = pd.concat(df)
-    # df = df[:80]
-    X_train = df["comment_text"].fillna('').values
-    y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
+    df_train = []
+    df_train_idx = filter(lambda x: x != dev_id, range(1, 11))
+    for i in df_train_idx:
+        df_train.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
+    df_train = pd.concat(df_train)
+    # df_train = df_train[:80]
+    X_train_raw = df_train["comment_text"].fillna('').values
+    y_train = df_train[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
-    '''
-    X_train, X_dev, y_train, y_dev = train_test_split(X_train, y_train, train_size=0.9, random_state=233)
-    print "Finish loading dev data"
-    '''
-    df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
-    # df = df[:200]
-    X_dev = df["comment_text"].fillna('').values
-    y_dev = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
+    df_dev = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
+    # df_dev = df_dev[:200]
+    X_dev_raw = df_dev["comment_text"].fillna('').values
+    y_dev = df_dev[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
-    submission = pd.read_csv(os.path.join('test.csv'))
-    # df = df[:200]
-    X_test = submission["comment_text"].fillna('').values
+    df_test = pd.read_csv(os.path.join('test.csv'))
+    # df_test = df_test[:200]
+    X_test_raw = df_test["comment_text"].fillna('').values
     print "Finish loading test data"
 
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
-    tokenizer.fit_on_texts(list(X_train) + list(X_dev) + list(X_test))
-    X_train = sequence.pad_sequences(tokenizer.texts_to_sequences(X_train), maxlen=MAX_SEQUENCE_LENGTH)
-    X_dev = sequence.pad_sequences(tokenizer.texts_to_sequences(X_dev), maxlen=MAX_SEQUENCE_LENGTH)
-    X_test = sequence.pad_sequences(tokenizer.texts_to_sequences(X_test), maxlen=MAX_SEQUENCE_LENGTH)
+    tokenizer.fit_on_texts(list(X_train_raw) + list(X_dev_raw) + list(X_test_raw))
+    X_train = sequence.pad_sequences(tokenizer.texts_to_sequences(X_train_raw), maxlen=MAX_SEQUENCE_LENGTH)
+    X_dev = sequence.pad_sequences(tokenizer.texts_to_sequences(X_dev_raw), maxlen=MAX_SEQUENCE_LENGTH)
+    X_test = sequence.pad_sequences(tokenizer.texts_to_sequences(X_test_raw), maxlen=MAX_SEQUENCE_LENGTH)
 
     def get_coefs(word, *arr):
         return word, np.asarray(arr, dtype='float32')
@@ -122,15 +118,30 @@ def experiment(dev_id, model_dir, timestamp):
               callbacks=callbacks_list, verbose=2)
     # Loading model weights
     model.load_weights(filepath)
-    print('Predicting....')
-    y_test = model.predict(X_test, batch_size=1024, verbose=2)
 
-    submission = pd.DataFrame.from_dict({'id': df['id']})
+    y_train_predict = model.predict(X_train, batch_size=1024, verbose=2)
+    submission = pd.DataFrame.from_dict({'id': df_train['id']})
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
     for (id, class_name) in class_names.items():
-        submission[class_name] = y_test[:, id]
+        submission[class_name] = y_train_predict[:, id]
+    submission.to_csv(os.path.join(model_dir, 'train-predict.csv'), index=True)
+    print "Finish train set prediction"
+
+    y_dev_predict = model.predict(X_dev, batch_size=1024, verbose=2)
+    submission = pd.DataFrame.from_dict({'id': df_dev['id']})
+    class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+    for (id, class_name) in class_names.items():
+        submission[class_name] = y_dev_predict[:, id]
+    submission.to_csv(os.path.join(model_dir, 'dev-predict.csv'), index=True)
+    print "Finish dev set prediction"
+
+    y_test_predict = model.predict(X_test, batch_size=1024, verbose=2)
+    submission = pd.DataFrame.from_dict({'id': df_test['id']})
+    class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+    for (id, class_name) in class_names.items():
+        submission[class_name] = y_test_predict[:, id]
     submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)
-    print "Finish test"
+    print "Finish test set prediction"
 
     return 0
 
