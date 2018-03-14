@@ -2,6 +2,7 @@
 
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer, strip_accents_ascii
+from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
@@ -9,24 +10,11 @@ import numpy as np
 import sklearn.externals.joblib as jl
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
-from sklearn.svm import SVC
-
-'''
-param_grid = [
-    {
-        'clf__estimator__kernel': ['linear'],
-        'clf__estimator__C': [1e-1, 1, 10, 100]
-    },
-    {
-        'clf__estimator__kernel': ['rbf'],
-        'clf__estimator__C': [1e-1, 1, 10, 100],
-        'clf__estimator__gamma': [1e-1, 1]
-    }
-]
-'''
+import re
 
 def normalize(text):
-    text = strip_accents_ascii(text)
+    text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
+    text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
     text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
     return text
 
@@ -82,5 +70,5 @@ def experiment(input_path_training, input_path_test, model_path, clf):
 if __name__ == "__main__":
     training_set = os.path.join("../train.csv")
     test_set = os.path.join("../test.csv")
-    experiment(training_set, test_set, 'svm-rbf', OneVsRestClassifier(SVC(cache_size=60000, class_weight='balanced',
-                                                                      probability=True, kernel='rbf', C=10, gamma=1, verbose=2)))
+    experiment(training_set, test_set, 'svm', OneVsRestClassifier(SGDClassifier(n_iter=5, class_weight='balanced',
+                                                                               n_jobs=-1, verbose=2)))

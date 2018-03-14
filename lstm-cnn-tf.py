@@ -443,7 +443,7 @@ class LSTM_CNNModel(Model):
 
 if __name__ == "__main__":
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_tf' + sys.argv[1])
+    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_tf_' + sys.argv[1])
     mkdir_p(model_dir)
 
     experiment(int(sys.argv[1]), model_dir)

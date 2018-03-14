@@ -128,6 +128,7 @@ def experiment(dev_id, model_dir):
     for (id, class_name) in class_names.items():
         submission[class_name] = y_train_predict[:, id]
     submission.to_csv(os.path.join(model_dir, 'predict-keras-train.csv'), index=True)
+    print "- AUC: ", roc_auc_score(y_train, y_train_predict)
     print "Finish train set prediction"
 
     y_dev_predict = model.predict(X_dev, batch_size=1024, verbose=2)
@@ -137,6 +138,7 @@ def experiment(dev_id, model_dir):
     for (id, class_name) in class_names.items():
         submission[class_name] = y_dev_predict[:, id]
     submission.to_csv(os.path.join(model_dir, 'predict-keras-dev.csv'), index=True)
+    print "- AUC: ", roc_auc_score(y_dev, y_dev_predict)
     print "Finish dev set prediction"
 
     y_test_predict = model.predict(X_test, batch_size=1024, verbose=2)
@@ -164,7 +166,7 @@ class RocAucEvaluation(Callback):
 
 if __name__ == "__main__":
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_keras' + sys.argv[1])
+    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_keras_' + sys.argv[1])
     mkdir_p(model_dir)
 
     experiment(int(sys.argv[1]), model_dir)
