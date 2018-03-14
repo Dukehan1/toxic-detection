@@ -53,19 +53,19 @@ def experiment(dev_id, model_dir):
     for i in df_train_idx:
         df_train.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df_train = pd.concat(df_train)
-    df_train = df_train[:80]
+    # df_train = df_train[:80]
     X_train_raw = map(lambda t: normalize(t), df_train["comment_text"].fillna('').values)
     y_train = df_train[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
     df_dev = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
-    df_dev = df_dev[:200]
+    # df_dev = df_dev[:200]
     X_dev_raw = map(lambda t: normalize(t), df_dev["comment_text"].fillna('').values)
     y_dev = df_dev[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     df_test = pd.read_csv(os.path.join('test.csv'))
-    df_test = df_test[:200]
+    # df_test = df_test[:200]
     X_test_raw = map(lambda t: normalize(t), df_test["comment_text"].fillna('').values)
     print "Finish loading test data"
 

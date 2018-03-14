@@ -47,8 +47,8 @@ def experiment(input_path_training, input_path_test, model_path, clf):
     f1 = f1_score(y, predict, average='weighted')
     print "Accuracy For Training Set: " + str(acc)
     print "F1 For Training Set: " + str(f1)
-    predict_proba = classifier.predict_proba(X)
-    auc = roc_auc_score(y, predict_proba, average='macro')
+    predict = classifier.predict(X)
+    auc = roc_auc_score(y, predict, average='macro')
     print "AUC For Training Set: " + str(auc)
     jl.dump(classifier, os.path.join(model_path))
     print "Finish saving model"
@@ -59,11 +59,11 @@ def experiment(input_path_training, input_path_test, model_path, clf):
         X_test.append(normalize(row['comment_text'].decode('utf-8')))
     print "Finish loading test data"
 
-    predict_proba = classifier.predict_proba(X_test)
+    predict = classifier.predict(X_test)
     submission = pd.DataFrame.from_dict({'id': df['id']})
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
     for (id, class_name) in class_names.items():
-        submission[class_name] = predict_proba[:, id]
+        submission[class_name] = predict[:, id]
     submission.to_csv(model_path + '_submit.csv', index=False)
     print "Finish test"
 
