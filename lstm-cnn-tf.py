@@ -6,18 +6,14 @@ from datetime import datetime
 import time
 import tensorflow as tf
 import numpy as np
-from keras.metrics import binary_accuracy
-from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
-from sklearn.cross_validation import train_test_split
-from sklearn.feature_extraction.text import strip_accents_ascii
+import re
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
-from keras import backend as K
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 160554
+MAX_FEATURES = 156853
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -37,48 +33,43 @@ def mkdir_p(path):
             raise
 
 def normalize(text):
-    text = strip_accents_ascii(text.decode('utf-8'))
+    text = text.decode('utf-8')
+    text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
+    text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
     text = text.encode('utf-8')
-    text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
-    # text = str(TextBlob(text).correct())
     return text
 
-def experiment(dev_id, model_dir, timestamp):
+def experiment(dev_id, model_dir):
     print 80 * "="
     print "INITIALIZING"
     print 80 * "="
 
     df_train = []
-    df_idx = filter(lambda x: x != dev_id, range(1, 11))
-    for i in df_idx:
+    df_train_idx = filter(lambda x: x != dev_id, range(1, 11))
+    for i in df_train_idx:
         df_train.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df_train = pd.concat(df_train)
-    # df = df[:80]
-    X_train_o = df_train["comment_text"].fillna('').values
+    df_train = df_train[:80]
+    X_train_raw = map(lambda t: normalize(t), df_train["comment_text"].fillna('').values)
     y_train = df_train[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
-    '''
-    X_train, X_dev, y_train, y_dev = train_test_split(X_train, y_train, train_size=0.9, random_state=233)
-    print "Finish loading dev data"
-    '''
     df_dev = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
-    # df = df[:200]
-    X_dev_o = df_dev["comment_text"].fillna('').values
+    df_dev = df_dev[:200]
+    X_dev_raw = map(lambda t: normalize(t), df_dev["comment_text"].fillna('').values)
     y_dev = df_dev[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
-    df = pd.read_csv(os.path.join('test.csv'))
-    # df = df[:200]
-    X_test_o = df["comment_text"].fillna('').values
+    df_test = pd.read_csv(os.path.join('test.csv'))
+    df_test = df_test[:200]
+    X_test_raw = map(lambda t: normalize(t), df_test["comment_text"].fillna('').values)
     print "Finish loading test data"
 
-
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
-    tokenizer.fit_on_texts(list(X_train_o) + list(X_dev_o) + list(X_test_o))
-    X_train = sequence.pad_sequences(tokenizer.texts_to_sequences(X_train_o), maxlen=MAX_SEQUENCE_LENGTH)
-    X_dev = sequence.pad_sequences(tokenizer.texts_to_sequences(X_dev_o), maxlen=MAX_SEQUENCE_LENGTH)
-    X_test = sequence.pad_sequences(tokenizer.texts_to_sequences(X_test_o), maxlen=MAX_SEQUENCE_LENGTH)
+    tokenizer.fit_on_texts(list(X_train_raw) + list(X_dev_raw) + list(X_test_raw))
+    X_train = sequence.pad_sequences(tokenizer.texts_to_sequences(X_train_raw), maxlen=MAX_SEQUENCE_LENGTH)
+    X_dev = sequence.pad_sequences(tokenizer.texts_to_sequences(X_dev_raw), maxlen=MAX_SEQUENCE_LENGTH)
+    X_test = sequence.pad_sequences(tokenizer.texts_to_sequences(X_test_raw), maxlen=MAX_SEQUENCE_LENGTH)
 
     def get_coefs(word, *arr):
         return word, np.asarray(arr, dtype='float32')
@@ -98,7 +89,7 @@ def experiment(dev_id, model_dir, timestamp):
     with tf.Graph().as_default():
         print "Building model...",
         start = time.time()
-        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, timestamp + ".model"))
+        model = LSTM_CNNModel(config, embeddings_matrix, os.path.join(model_dir, "weight.model"))
         print "took {:.2f} seconds\n".format(time.time() - start)
 
         init = tf.global_variables_initializer()
@@ -110,7 +101,15 @@ def experiment(dev_id, model_dir, timestamp):
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
             session.run(init)
-            saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
+            # saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
+
+            print 80 * "="
+            print "TRAINING"
+            print 80 * "="
+            start = time.time()
+            model.fit(session, saver, [X_train, y_train], [X_dev, y_dev])
+            print "took {:.2f} seconds\n".format(time.time() - start)
+            print "Done!"
 
             train_set = [X_train]
             t = 0
@@ -125,13 +124,13 @@ def experiment(dev_id, model_dir, timestamp):
                 t += INFERENCE_BATCH_SIZE
             (predict_raw, predict_proba) = predict_raw
             submission = pd.DataFrame.from_dict({'id': df_train['id']})
-            submission['comment_text'] = X_train_o
+            submission['comment_text'] = X_train_raw
             class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
             for (id, class_name) in class_names.items():
                 submission[class_name] = predict_proba[:, id]
-            submission.to_csv(os.path.join(model_dir, 'predict-dev10-train-tf.csv'))
+            submission.to_csv(os.path.join(model_dir, 'predict-tf-train.csv'))
             print "- AUC: ", roc_auc_score(y_train, predict_proba)
-            print "Finish train"
+            print "Finish train set prediction"
 
             dev_set = [X_dev]
             t = 0
@@ -146,13 +145,32 @@ def experiment(dev_id, model_dir, timestamp):
                 t += INFERENCE_BATCH_SIZE
             (predict_raw, predict_proba) = predict_raw
             submission = pd.DataFrame.from_dict({'id': df_dev['id']})
-            submission['comment_text'] = X_dev_o
+            submission['comment_text'] = X_dev_raw
             class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
             for (id, class_name) in class_names.items():
                 submission[class_name] = predict_proba[:, id]
-            submission.to_csv(os.path.join(model_dir, 'predict-dev10-dev-tf.csv'))
+            submission.to_csv(os.path.join(model_dir, 'predict-tf-dev.csv'))
             print "- AUC: ", roc_auc_score(y_dev, predict_proba)
-            print "Finish dev"
+            print "Finish dev set prediction"
+
+            test_set = [X_test]
+            t = 0
+            predict_raw = None
+            # prevent OOM
+            while t < len(test_set[0]):
+                if predict_raw is None:
+                    predict_raw = model.predict_on_batch(session, test_set[0][t:t + INFERENCE_BATCH_SIZE])
+                else:
+                    predict_raw = np.concatenate(
+                        (predict_raw, model.predict_on_batch(session, test_set[0][t:t + INFERENCE_BATCH_SIZE])), axis=1)
+                t += INFERENCE_BATCH_SIZE
+            (predict_raw, predict_proba) = predict_raw
+            submission = pd.DataFrame.from_dict({'id': df_test['id']})
+            class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+            for (id, class_name) in class_names.items():
+                submission[class_name] = predict_proba[:, id]
+            submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)
+            print "Finish test set prediction"
 
     return 0
 
@@ -264,7 +282,7 @@ class Config(object):
     """
     for LSTM
     """
-    hidden_size = 200
+    hidden_size = 400
     clip_gradients = True
     max_grad_norm = 5.
 
@@ -379,13 +397,9 @@ class LSTM_CNNModel(Model):
             t += INFERENCE_BATCH_SIZE
         (predict_raw, predict_proba) = predict
         auc = roc_auc_score(examples[1], predict_proba, average='macro')
-        predict_tag = np.zeros(predict_raw.shape, dtype='int32')
-        for i in range(len(predict_raw)):
-            for j in range(len(predict_raw[i])):
-                if predict_raw[i, j] >= 0:
-                    predict_tag[i, j] = 1
-        acc = accuracy_score(examples[1], predict_tag)
-        f1 = f1_score(examples[1], predict_tag, average='weighted')
+        y_predict = np.round(predict_proba)
+        acc = np.mean(np.equal(examples[1], y_predict))
+        f1 = f1_score(examples[1], y_predict, average='weighted')
         print "- Acc: ", acc
         print "- F1: ", f1
         print "- AUC: ", auc
@@ -428,9 +442,8 @@ class LSTM_CNNModel(Model):
         self.build()
 
 if __name__ == "__main__":
-    timestamp = '20180313165134890'
     import sys
-    model_dir = os.path.join('lstm_cnn_10')
+    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_tf' + sys.argv[1])
     mkdir_p(model_dir)
 
-    experiment(10, model_dir, timestamp)
+    experiment(int(sys.argv[1]), model_dir)

@@ -4,9 +4,8 @@ import os
 import errno
 from datetime import datetime
 import numpy as np
-from nltk.tokenize.treebank import TreebankWordTokenizer
+import re
 import pandas as pd
-from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import roc_auc_score
 from keras.models import Model
 from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, Bidirectional, \
@@ -18,7 +17,7 @@ from keras.callbacks import Callback
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 160554
+MAX_FEATURES = 156853
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -38,13 +37,13 @@ def mkdir_p(path):
             raise
 
 def normalize(text):
-    text = strip_accents_ascii(text.decode('utf-8'))
+    text = text.decode('utf-8')
+    text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
+    text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
     text = text.encode('utf-8')
-    text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
-    # text = str(TextBlob(text).correct())
     return text
 
-def experiment(dev_id, model_dir, timestamp):
+def experiment(dev_id, model_dir):
     print 80 * "="
     print "INITIALIZING"
     print 80 * "="
@@ -54,20 +53,20 @@ def experiment(dev_id, model_dir, timestamp):
     for i in df_train_idx:
         df_train.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df_train = pd.concat(df_train)
-    # df_train = df_train[:80]
-    X_train_raw = df_train["comment_text"].fillna('').values
+    df_train = df_train[:80]
+    X_train_raw = map(lambda t: normalize(t), df_train["comment_text"].fillna('').values)
     y_train = df_train[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
     df_dev = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
-    # df_dev = df_dev[:200]
-    X_dev_raw = df_dev["comment_text"].fillna('').values
+    df_dev = df_dev[:200]
+    X_dev_raw = map(lambda t: normalize(t), df_dev["comment_text"].fillna('').values)
     y_dev = df_dev[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     df_test = pd.read_csv(os.path.join('test.csv'))
-    # df_test = df_test[:200]
-    X_test_raw = df_test["comment_text"].fillna('').values
+    df_test = df_test[:200]
+    X_test_raw = map(lambda t: normalize(t), df_test["comment_text"].fillna('').values)
     print "Finish loading test data"
 
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
@@ -120,7 +119,7 @@ def experiment(dev_id, model_dir, timestamp):
     model.fit(X_train, y_train, batch_size=128, epochs=4, validation_data=(X_dev, y_dev),
               callbacks=callbacks_list, verbose=2)
     # Loading model weights
-    model.load_weights(filepath)
+    # model.load_weights(filepath)
 
     y_train_predict = model.predict(X_train, batch_size=1024, verbose=2)
     submission = pd.DataFrame.from_dict({'id': df_train['id']})
@@ -128,7 +127,7 @@ def experiment(dev_id, model_dir, timestamp):
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
     for (id, class_name) in class_names.items():
         submission[class_name] = y_train_predict[:, id]
-    submission.to_csv(os.path.join(model_dir, 'train-predict.csv'), index=True)
+    submission.to_csv(os.path.join(model_dir, 'predict-keras-train.csv'), index=True)
     print "Finish train set prediction"
 
     y_dev_predict = model.predict(X_dev, batch_size=1024, verbose=2)
@@ -137,7 +136,7 @@ def experiment(dev_id, model_dir, timestamp):
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
     for (id, class_name) in class_names.items():
         submission[class_name] = y_dev_predict[:, id]
-    submission.to_csv(os.path.join(model_dir, 'dev-predict.csv'), index=True)
+    submission.to_csv(os.path.join(model_dir, 'predict-keras-dev.csv'), index=True)
     print "Finish dev set prediction"
 
     y_test_predict = model.predict(X_test, batch_size=1024, verbose=2)
@@ -164,15 +163,8 @@ class RocAucEvaluation(Callback):
             print("\n ROC-AUC - epoch: {:d} - score: {:.6f}".format(epoch+1, score))
 
 if __name__ == "__main__":
-    '''
-    timestamp = '20180311135230454'
     import sys
-    model_dir = os.path.join('dev10-d10-b128_20180311135230454')
-    mkdir_p(model_dir)
-    '''
-    timestamp = get_timestamp()
-    import sys
-    model_dir = os.path.join(os.path.abspath('.'), sys.argv[1] + '_' + timestamp)
+    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_keras' + sys.argv[1])
     mkdir_p(model_dir)
 
-    experiment(10, model_dir, timestamp)
+    experiment(int(sys.argv[1]), model_dir)

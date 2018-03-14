@@ -3,6 +3,8 @@
 import os
 import errno
 from datetime import datetime
+
+import re
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
 from sklearn.feature_extraction.text import strip_accents_ascii
@@ -11,7 +13,7 @@ from textblob import TextBlob
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 140285
+MAX_FEATURES = 156853
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -31,10 +33,10 @@ def mkdir_p(path):
             raise
 
 def normalize(text):
-    text = strip_accents_ascii(text.decode('utf-8'))
+    text = text.decode('utf-8')
+    text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
+    text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
     text = text.encode('utf-8')
-    text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
-    # text = str(TextBlob(text).correct())
     return text
 
 def experiment():
