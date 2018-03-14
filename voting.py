@@ -12,6 +12,7 @@ def experiment(path):
         result.append(df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values)
         print "Finish loading data ", p
     result = np.sum(result, axis=0, dtype=np.float32)
+    result = np.divide(result, 6.0)
 
     submission = pd.DataFrame.from_dict({'id': df['id']})
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
