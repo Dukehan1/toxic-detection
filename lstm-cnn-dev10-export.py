@@ -13,6 +13,7 @@ from sklearn.cross_validation import train_test_split
 from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
+from keras import backend as K
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
@@ -129,7 +130,7 @@ def experiment(dev_id, model_dir, timestamp):
             for (id, class_name) in class_names.items():
                 submission[class_name] = predict_proba[:, id]
             submission.to_csv(os.path.join(model_dir, 'predict-dev10-train-tf.csv'))
-            print binary_accuracy(y_train, predict_proba)
+            print binary_accuracy(K.variable(y_train), K.variable(predict_proba))
             print "Finish train"
 
             dev_set = [X_dev]
@@ -150,7 +151,7 @@ def experiment(dev_id, model_dir, timestamp):
             for (id, class_name) in class_names.items():
                 submission[class_name] = predict_proba[:, id]
             submission.to_csv(os.path.join(model_dir, 'predict-dev10-dev-tf.csv'))
-            print binary_accuracy(y_dev, predict_proba)
+            print binary_accuracy(K.variable(y_dev), K.variable(predict_proba))
             print "Finish dev"
 
     return 0
