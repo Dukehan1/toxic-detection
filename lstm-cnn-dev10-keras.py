@@ -10,7 +10,7 @@ from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import roc_auc_score
 from keras.models import Model
 from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, Bidirectional, \
-    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D, LSTM
+    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D, LSTM, Add
 from keras.preprocessing import text, sequence
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping,ModelCheckpoint
@@ -94,11 +94,14 @@ def experiment(dev_id, model_dir, timestamp):
         x = Embedding(valid_features, EMBEDDING_DIM, weights=[embeddings_matrix])(inp)
         x = SpatialDropout1D(0.5)(x)
         x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
-        x = Conv1D(100, kernel_size=3, padding="valid", kernel_initializer="glorot_uniform")(x)
-        avg_pool = GlobalAveragePooling1D()(x)
-        max_pool = GlobalMaxPooling1D()(x)
-        conc = concatenate([avg_pool, max_pool])
-        outp = Dense(6, activation="sigmoid")(conc)
+        pools = []
+        for i in range(1, 11):
+            conv = Conv1D(100, kernel_size=i, activation="relu", use_bias=True)(x)
+            avg_pool = GlobalAveragePooling1D()(conv)
+            max_pool = GlobalMaxPooling1D()(conv)
+            pool = concatenate([avg_pool, max_pool])
+            pools.append(pool)
+        outp = Dense(6, activation="sigmoid")(Add()(pools))
         model = Model(inputs=inp, outputs=outp)
         model.compile(loss='binary_crossentropy',
                       optimizer=Adam(lr=1e-3),
