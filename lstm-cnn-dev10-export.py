@@ -108,7 +108,7 @@ def experiment(dev_id, model_dir, timestamp):
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
             session.run(init)
-            # saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
+            saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
 
             train_set = [X_train]
             t = 0
