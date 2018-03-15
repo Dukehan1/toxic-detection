@@ -101,7 +101,6 @@ def experiment(dev_id, model_dir):
         with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as session:
             # writer = tf.summary.FileWriter("logs/", session.graph)
             session.run(init)
-            # saver.restore(session, os.path.join(model_dir, timestamp + ".model"))
 
             print 80 * "="
             print "TRAINING"
@@ -110,6 +109,9 @@ def experiment(dev_id, model_dir):
             model.fit(session, saver, [X_train, y_train], [X_dev, y_dev])
             print "took {:.2f} seconds\n".format(time.time() - start)
             print "Done!"
+
+            # 注意：要加载保存的最优模型
+            saver.restore(session, os.path.join(model_dir, "weight.model"))
 
             train_set = [X_train]
             t = 0

@@ -70,5 +70,5 @@ def experiment(input_path_training, input_path_test, model_path, clf):
 if __name__ == "__main__":
     training_set = os.path.join("../train.csv")
     test_set = os.path.join("../test.csv")
-    experiment(training_set, test_set, 'svm', OneVsRestClassifier(SGDClassifier(n_iter=5, class_weight='balanced',
+    experiment(training_set, test_set, 'svm', OneVsRestClassifier(SGDClassifier(n_iter=20, class_weight='balanced',
                                                                                n_jobs=-1, verbose=2)))

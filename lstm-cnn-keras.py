@@ -118,8 +118,8 @@ def experiment(dev_id, model_dir):
 
     model.fit(X_train, y_train, batch_size=128, epochs=4, validation_data=(X_dev, y_dev),
               callbacks=callbacks_list, verbose=2)
-    # Loading model weights
-    # model.load_weights(filepath)
+    # 注意：要加载保存的最优模型
+    model.load_weights(filepath)
 
     y_train_predict = model.predict(X_train, batch_size=1024, verbose=2)
     submission = pd.DataFrame.from_dict({'id': df_train['id']})
