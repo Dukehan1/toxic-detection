@@ -107,7 +107,7 @@ def experiment(dev_id, model_dir):
 
     model = get_model()
 
-    ra_val = RocAucMetricCallback(),  # include it before EarlyStopping!
+    ra_val = RocAucMetricCallback()  # include it before EarlyStopping!
     filepath = os.path.join(model_dir, "weights_base.best.hdf5")
     checkpoint = ModelCheckpoint(filepath, monitor='roc_auc_val', verbose=2, save_best_only=True, mode='max')
     early = EarlyStopping(monitor="roc_auc_val", mode="max", patience=5)
