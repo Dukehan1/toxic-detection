@@ -10,9 +10,11 @@ import numpy as np
 import sklearn.externals.joblib as jl
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
+import re
 
 def normalize(text):
-    text = strip_accents_ascii(text)
+    text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
+    text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
     text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
     return text
 
