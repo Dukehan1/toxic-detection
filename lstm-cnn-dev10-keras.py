@@ -18,7 +18,7 @@ from keras.callbacks import Callback
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 150000
+MAX_FEATURES = 160554
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -55,7 +55,7 @@ def experiment(dev_id, model_dir, timestamp):
         df.append(pd.read_csv(os.path.join('split', 'train-' + str(i) + '.csv')))
     df = pd.concat(df)
     # df = df[:80]
-    X_train = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
+    X_train = df["comment_text"].fillna('').values
     y_train = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading training data"
 
@@ -65,13 +65,13 @@ def experiment(dev_id, model_dir, timestamp):
     '''
     df = pd.read_csv(os.path.join('split', 'train-' + str(dev_id) + '.csv'))
     # df = df[:200]
-    X_dev = map(lambda x: normalize(x), df["comment_text"].fillna('').values)
+    X_dev = df["comment_text"].fillna('').values
     y_dev = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].values
     print "Finish loading dev data"
 
     submission = pd.read_csv(os.path.join('test.csv'))
     # df = df[:200]
-    X_test = map(lambda x: normalize(x), submission["comment_text"].fillna('').values)
+    X_test = submission["comment_text"].fillna('').values
     print "Finish loading test data"
 
     tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
@@ -125,7 +125,10 @@ def experiment(dev_id, model_dir, timestamp):
     print('Predicting....')
     y_test = model.predict(X_test, batch_size=1024, verbose=2)
 
-    submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_test
+    submission = pd.DataFrame.from_dict({'id': df['id']})
+    class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
+    for (id, class_name) in class_names.items():
+        submission[class_name] = y_test[:, id]
     submission.to_csv(os.path.join(model_dir, 'submit.csv'), index=False)
     print "Finish test"
 

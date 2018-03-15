@@ -3,20 +3,15 @@
 import os
 import errno
 from datetime import datetime
-import time
-import tensorflow as tf
-import numpy as np
 from nltk.tokenize.treebank import TreebankWordTokenizer
 import pandas as pd
-from sklearn.cross_validation import train_test_split
 from sklearn.feature_extraction.text import strip_accents_ascii
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-from keras.preprocessing import text, sequence
+from keras.preprocessing import text
 from textblob import TextBlob
 
 MAX_SEQUENCE_LENGTH = 300
 EMBEDDING_DIM = 300
-MAX_FEATURES = 150000
+MAX_FEATURES = 140285
 VECTOR_DIR = os.path.join('glove.840B.300d.txt')
 
 INFERENCE_BATCH_SIZE = 400
@@ -65,6 +60,11 @@ def experiment():
     word_list = [''] * (len(tokenizer.word_index) + 1)
     for k, v in tokenizer.word_index.items():
         word_list[v] = (k, tokenizer.word_counts[k])
+    i = 0
+    for t in word_list[1:]:
+        if tokenizer.word_counts[t[0]] > 1:
+            i += 1
+    print i
     print word_list[:MAX_FEATURES]
     print
     print
