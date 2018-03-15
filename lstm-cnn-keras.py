@@ -110,13 +110,13 @@ def experiment(dev_id, model_dir):
 
     model = get_model()
 
+    ra_val = RocAucMetricCallback(), # include it before EarlyStopping!
     filepath = os.path.join(model_dir, "weights_base.best.hdf5")
-    checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=2, save_best_only=True, mode='max')
-    early = EarlyStopping(monitor="val_acc", mode="max", patience=5)
-    ra_val = RocAucEvaluation(validation_data=(X_dev, y_dev), interval=1)
+    checkpoint = ModelCheckpoint(filepath, monitor='roc_auc_val', verbose=2, save_best_only=True, mode='max')
+    early = EarlyStopping(monitor="roc_auc_val", mode="max", patience=5)
     callbacks_list = [ra_val, checkpoint, early]
 
-    model.fit(X_train, y_train, batch_size=128, epochs=4, validation_data=(X_dev, y_dev),
+    model.fit(X_train, y_train, batch_size=128, epochs=8, validation_data=(X_dev, y_dev),
               callbacks=callbacks_list, verbose=2)
     # 注意：要加载保存的最优模型
     model.load_weights(filepath)
@@ -151,18 +151,40 @@ def experiment(dev_id, model_dir):
 
     return 0
 
-class RocAucEvaluation(Callback):
-    def __init__(self, validation_data=(), interval=1):
-        super(Callback, self).__init__()
+class RocAucMetricCallback(Callback):
+    def __init__(self, predict_batch_size=1024, include_on_batch=False):
+        super(RocAucMetricCallback, self).__init__()
+        self.predict_batch_size=predict_batch_size
+        self.include_on_batch=include_on_batch
 
-        self.interval = interval
-        self.X_val, self.y_val = validation_data
+    def on_batch_begin(self, batch, logs={}):
+        pass
+
+    def on_batch_end(self, batch, logs={}):
+        if self.include_on_batch:
+            logs['roc_auc_val'] = float('-inf')
+            if self.validation_data:
+                logs['roc_auc_val'] = roc_auc_score(self.validation_data[1],
+                                                  self.model.predict(self.validation_data[0],
+                                                                     batch_size=self.predict_batch_size))
+
+    def on_train_begin(self, logs={}):
+        if not 'roc_auc_val' in self.params['metrics']:
+            self.params['metrics'].append('roc_auc_val')
+
+    def on_train_end(self, logs={}):
+        pass
+
+    def on_epoch_begin(self, epoch, logs={}):
+        pass
 
     def on_epoch_end(self, epoch, logs={}):
-        if epoch % self.interval == 0:
-            y_pred = self.model.predict(self.X_val, verbose=0)
-            score = roc_auc_score(self.y_val, y_pred)
-            print("\n ROC-AUC - epoch: {:d} - score: {:.6f}".format(epoch+1, score))
+        logs['roc_auc_val'] = float('-inf')
+        if self.validation_data:
+            logs['roc_auc_val'] = roc_auc_score(self.validation_data[1],
+                                              self.model.predict(self.validation_data[0],
+                                                                 batch_size=self.predict_batch_size))
+            print("\n ROC-AUC - epoch: {:d} - score: {:.6f}".format(epoch + 1, logs['roc_auc_val']))
 
 if __name__ == "__main__":
     import sys
