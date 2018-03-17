@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import roc_auc_score
 from keras.models import Model
 from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, Bidirectional, \
-    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D, LSTM, Add
+    GlobalAveragePooling1D, GlobalMaxPooling1D, Conv1D, LSTM, Add, GRU
 from keras.preprocessing import text, sequence
 from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping,ModelCheckpoint
@@ -86,10 +86,10 @@ def experiment(dev_id, model_dir):
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
         x = Embedding(valid_features, EMBEDDING_DIM)(inp)
-        x = SpatialDropout1D(0.5)(x)
-        x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
+        x = SpatialDropout1D(0.2)(x)
+        x = Bidirectional(GRU(200, return_sequences=True, recurrent_dropout=0.2))(x)
         pools = []
-        for i in range(1, 11):
+        for i in range(3, 10):
             conv = Conv1D(100, kernel_size=i, activation="relu", use_bias=True)(x)
             avg_pool = GlobalAveragePooling1D()(conv)
             max_pool = GlobalMaxPooling1D()(conv)
