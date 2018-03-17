@@ -21,7 +21,7 @@ MAX_SEQUENCE_LENGTH = 2000
 EMBEDDING_DIM = 50
 MAX_FEATURES = 68
 
-INFERENCE_BATCH_SIZE = 400
+INFERENCE_BATCH_SIZE = 128
 
 def get_timestamp():
     (dt, micro) = datetime.utcnow().strftime('%Y%m%d%H%M%S.%f').split('.')
@@ -116,7 +116,7 @@ def experiment(dev_id, model_dir):
     # 注意：要加载保存的最优模型
     model.load_weights(filepath)
 
-    y_train_predict = model.predict(X_train, batch_size=1024, verbose=2)
+    y_train_predict = model.predict(X_train, batch_size=INFERENCE_BATCH_SIZE, verbose=2)
     submission = pd.DataFrame.from_dict({'id': df_train['id']})
     submission['comment_text'] = X_train_raw
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
@@ -126,7 +126,7 @@ def experiment(dev_id, model_dir):
     print "- AUC: ", roc_auc_score(y_train, y_train_predict)
     print "Finish train set prediction"
 
-    y_dev_predict = model.predict(X_dev, batch_size=1024, verbose=2)
+    y_dev_predict = model.predict(X_dev, batch_size=INFERENCE_BATCH_SIZE, verbose=2)
     submission = pd.DataFrame.from_dict({'id': df_dev['id']})
     submission['comment_text'] = X_dev_raw
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
@@ -136,7 +136,7 @@ def experiment(dev_id, model_dir):
     print "- AUC: ", roc_auc_score(y_dev, y_dev_predict)
     print "Finish dev set prediction"
 
-    y_test_predict = model.predict(X_test, batch_size=1024, verbose=2)
+    y_test_predict = model.predict(X_test, batch_size=INFERENCE_BATCH_SIZE, verbose=2)
     submission = pd.DataFrame.from_dict({'id': df_test['id']})
     class_names = {0: 'toxic', 1: 'severe_toxic', 2: 'obscene', 3: 'threat', 4: 'insult', 5: 'identity_hate'}
     for (id, class_name) in class_names.items():
@@ -147,7 +147,7 @@ def experiment(dev_id, model_dir):
     return 0
 
 class RocAucMetricCallback(Callback):
-    def __init__(self, predict_batch_size=1024, include_on_batch=False):
+    def __init__(self, predict_batch_size=INFERENCE_BATCH_SIZE, include_on_batch=False):
         super(RocAucMetricCallback, self).__init__()
         self.predict_batch_size=predict_batch_size
         self.include_on_batch=include_on_batch
