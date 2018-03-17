@@ -80,7 +80,8 @@ def experiment(dev_id, model_dir):
 
     word_index = tokenizer.word_index
     print word_index
-    valid_features = min(MAX_FEATURES, len(word_index) + 1)
+    valid_features = min(MAX_FEATURES, len(word_index)) + 1
+    print valid_features
 
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
