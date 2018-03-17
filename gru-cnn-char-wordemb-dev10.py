@@ -7,6 +7,7 @@ import numpy as np
 import re
 from collections import Counter
 import pandas as pd
+from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import roc_auc_score
 from nltk.tokenize.treebank import TreebankWordTokenizer
 from keras.models import Model
@@ -48,6 +49,7 @@ def normalize(text):
     text = text.decode('utf-8')
     text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
     text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
+    text = strip_accents_ascii(text)
     text = text.encode('utf-8')
     return text
 
