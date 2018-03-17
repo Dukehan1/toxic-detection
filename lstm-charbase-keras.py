@@ -82,7 +82,7 @@ def experiment(dev_id, model_dir):
     print word_index
     valid_features = min(MAX_FEATURES, len(word_index)) + 1
     print valid_features
-    embeddings_matrix = np.r_[np.zeros(valid_features - 1), np.eye(valid_features - 1, dtype=int)]
+    embeddings_matrix = np.r_[np.zeros((1, valid_features - 1)), np.eye(valid_features - 1, dtype=int)]
     print embeddings_matrix
 
     def get_model():
