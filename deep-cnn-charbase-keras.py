@@ -85,7 +85,7 @@ def experiment(dev_id, model_dir):
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
         x = Embedding(valid_features, valid_features - 1,
-                      weights=[one_hot(range(-1, valid_features), valid_features - 1)], trainable=False)(inp)
+                      weights=[one_hot(range(-1, valid_features - 1), valid_features - 1)], trainable=False)(inp)
         for i in range(1, 3):
             x = Conv1D(filters=256, kernel_size=7, use_bias=True)(x)
             x = BatchNormalization()(x)

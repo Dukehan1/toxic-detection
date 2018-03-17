@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy as np
 import re
 import pandas as pd
+from keras.backend import one_hot
 from nltk import TreebankWordTokenizer
 from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import roc_auc_score
@@ -18,7 +19,6 @@ from keras.callbacks import EarlyStopping,ModelCheckpoint
 from keras.callbacks import Callback
 
 MAX_SEQUENCE_LENGTH = 2000
-EMBEDDING_DIM = 50
 MAX_FEATURES = 68
 
 INFERENCE_BATCH_SIZE = 128
@@ -85,7 +85,8 @@ def experiment(dev_id, model_dir):
 
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
-        x = Embedding(valid_features, EMBEDDING_DIM)(inp)
+        x = Embedding(valid_features, valid_features - 1,
+                      weights=[one_hot(range(-1, valid_features - 1), valid_features - 1)], trainable=False)(inp)
         x = SpatialDropout1D(0.5)(x)
         x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
         x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
