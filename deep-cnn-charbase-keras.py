@@ -5,6 +5,7 @@ import errno
 from datetime import datetime
 import re
 import pandas as pd
+import numpy as np
 from keras.backend import one_hot
 from nltk import TreebankWordTokenizer
 from sklearn.feature_extraction.text import strip_accents_ascii
@@ -81,11 +82,12 @@ def experiment(dev_id, model_dir):
     print word_index
     valid_features = min(MAX_FEATURES, len(word_index)) + 1
     print valid_features
+    embeddings_matrix = np.r_[np.zeros(valid_features - 1), np.eye(valid_features - 1, dtype=int)]
+    print embeddings_matrix
 
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
-        x = Embedding(valid_features, valid_features - 1,
-                      weights=[one_hot(range(-1, valid_features - 1), valid_features - 1)], trainable=False)(inp)
+        x = Embedding(valid_features, valid_features - 1, weights=[embeddings_matrix], trainable=False)(inp)
         for i in range(1, 3):
             x = Conv1D(filters=256, kernel_size=7, use_bias=True)(x)
             x = BatchNormalization()(x)

@@ -82,11 +82,12 @@ def experiment(dev_id, model_dir):
     print word_index
     valid_features = min(MAX_FEATURES, len(word_index)) + 1
     print valid_features
+    embeddings_matrix = np.r_[np.zeros(valid_features - 1), np.eye(valid_features - 1, dtype=int)]
+    print embeddings_matrix
 
     def get_model():
         inp = Input(shape=(MAX_SEQUENCE_LENGTH,))
-        x = Embedding(valid_features, valid_features - 1,
-                      weights=[one_hot(range(-1, valid_features - 1), valid_features - 1)], trainable=False)(inp)
+        x = Embedding(valid_features, valid_features - 1, weights=[embeddings_matrix], trainable=False)(inp)
         x = SpatialDropout1D(0.5)(x)
         x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
         x = Bidirectional(LSTM(200, return_sequences=True, recurrent_dropout=0.5))(x)
