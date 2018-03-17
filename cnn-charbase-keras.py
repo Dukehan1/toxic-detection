@@ -17,7 +17,7 @@ from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping,ModelCheckpoint
 from keras.callbacks import Callback
 
-MAX_SEQUENCE_LENGTH = 3000
+MAX_SEQUENCE_LENGTH = 2000
 EMBEDDING_DIM = 50
 MAX_FEATURES = 68
 
