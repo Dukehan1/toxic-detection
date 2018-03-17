@@ -23,7 +23,9 @@ def experiment(path):
 
 if __name__ == "__main__":
     path = [
-        'ml/lr_submit.csv',
-        'submit.csv'
+        'result/submit_lstm_cnn.csv',
+        'result/submit_cnn.csv',
+        'result/submit_lstm.csv',
+        'result/submit_residual.csv',
     ]
     experiment(path)
