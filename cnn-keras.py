@@ -81,10 +81,10 @@ def experiment(dev_id, model_dir):
     embeddings_dict = dict(get_coefs(*o.rstrip().rsplit(' ')) for o in open(VECTOR_DIR))
 
     word_index = tokenizer.word_index
-    valid_features = min(MAX_FEATURES, len(word_index) + 1)
+    valid_features = min(MAX_FEATURES, len(word_index)) + 1
     embeddings_matrix = np.random.uniform(-1, 1, (valid_features, EMBEDDING_DIM))
     for word, i in word_index.items():
-        if i >= MAX_FEATURES: continue
+        if i >= valid_features: continue
         embedding_vector = embeddings_dict.get(word)
         if embedding_vector is not None: embeddings_matrix[i] = embedding_vector
 
