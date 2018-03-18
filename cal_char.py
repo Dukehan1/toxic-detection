@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import strip_accents_ascii, strip_accents_unicode
 from keras.preprocessing import text
 
-MAX_SEQUENCE_LENGTH = 2000
+MAX_SEQUENCE_LENGTH = 1000
 EMBEDDING_DIM = 50
 INFERENCE_BATCH_SIZE = 400
 

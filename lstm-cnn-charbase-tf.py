@@ -8,15 +8,16 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import re
+
+from nltk import TreebankWordTokenizer
+from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 from keras.preprocessing import text, sequence
 
-MAX_SEQUENCE_LENGTH = 300
-EMBEDDING_DIM = 300
-MAX_FEATURES = 156853
-VECTOR_DIR = os.path.join('glove.840B.300d.txt')
+MAX_SEQUENCE_LENGTH = 1000
+MAX_FEATURES = 68
 
-INFERENCE_BATCH_SIZE = 400
+INFERENCE_BATCH_SIZE = 128
 
 def get_timestamp():
     (dt, micro) = datetime.utcnow().strftime('%Y%m%d%H%M%S.%f').split('.')
@@ -36,7 +37,9 @@ def normalize(text):
     text = text.decode('utf-8')
     text = re.sub(r'[a-zA-z]+://[^\s]*', '', text)
     text = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '', text)
+    text = strip_accents_ascii(text)
     text = text.encode('utf-8')
+    text = ' '.join(map(lambda x: x.lower(), TreebankWordTokenizer().tokenize(text)))
     return text
 
 def experiment(dev_id, model_dir):
@@ -65,24 +68,18 @@ def experiment(dev_id, model_dir):
     X_test_raw = map(lambda t: normalize(t), df_test["comment_text"].fillna('').values)
     print "Finish loading test data"
 
-    tokenizer = text.Tokenizer(num_words=MAX_FEATURES)
+    tokenizer = text.Tokenizer(num_words=MAX_FEATURES, char_level=True)
     tokenizer.fit_on_texts(list(X_train_raw) + list(X_dev_raw) + list(X_test_raw))
     X_train = sequence.pad_sequences(tokenizer.texts_to_sequences(X_train_raw), maxlen=MAX_SEQUENCE_LENGTH)
     X_dev = sequence.pad_sequences(tokenizer.texts_to_sequences(X_dev_raw), maxlen=MAX_SEQUENCE_LENGTH)
     X_test = sequence.pad_sequences(tokenizer.texts_to_sequences(X_test_raw), maxlen=MAX_SEQUENCE_LENGTH)
 
-    def get_coefs(word, *arr):
-        return word, np.asarray(arr, dtype='float32')
-
-    embeddings_dict = dict(get_coefs(*o.rstrip().rsplit(' ')) for o in open(VECTOR_DIR))
-
     word_index = tokenizer.word_index
+    print word_index
     valid_features = min(MAX_FEATURES, len(word_index)) + 1
-    embeddings_matrix = np.random.uniform(-1, 1, (valid_features, EMBEDDING_DIM))
-    for word, i in word_index.items():
-        if i >= MAX_FEATURES: continue
-        embedding_vector = embeddings_dict.get(word)
-        if embedding_vector is not None: embeddings_matrix[i] = embedding_vector
+    print valid_features
+    embeddings_matrix = np.r_[np.zeros((1, valid_features - 1)), np.eye(valid_features - 1, dtype=int)]
+    print embeddings_matrix
 
     config = Config()
 
@@ -266,11 +263,10 @@ class Config(object):
     instantiation.
     """
     max_length = MAX_SEQUENCE_LENGTH
-    embed_size = EMBEDDING_DIM
     batch_size = 128
     n_epochs = 4
     lr = 0.001
-    dropout = 0.5
+    dropout = 0.8
 
     # open multitask
     label_num = 6
@@ -278,7 +274,7 @@ class Config(object):
     """
     for CNN
     """
-    filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    filter_sizes = [3, 4, 5, 6, 7, 8, 9]
     num_filters = 100
 
     """
@@ -305,7 +301,7 @@ class LSTM_CNNModel(Model):
 
     def add_prediction_op(self):
 
-        word_embeddings = tf.Variable(self.pretrained_word_embeddings, dtype=tf.float32)
+        word_embeddings = tf.Variable(self.pretrained_word_embeddings, dtype=tf.float32, trainable=False)
         x = tf.nn.embedding_lookup(word_embeddings, self.inputs_placeholder)
         x = tf.nn.dropout(x, self.dropout_placeholder)
 
@@ -445,7 +441,7 @@ class LSTM_CNNModel(Model):
 
 if __name__ == "__main__":
     import sys
-    model_dir = os.path.join(os.path.abspath('.'), 'lstm_cnn_tf_' + sys.argv[1])
+    model_dir = os.path.join(os.path.abspath('.'), 'char_lstm_cnn_tf_' + sys.argv[1])
     mkdir_p(model_dir)
 
     experiment(int(sys.argv[1]), model_dir)

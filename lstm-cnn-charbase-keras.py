@@ -18,7 +18,7 @@ from keras.optimizers import Adam
 from keras.callbacks import EarlyStopping,ModelCheckpoint
 from keras.callbacks import Callback
 
-MAX_SEQUENCE_LENGTH = 2000
+MAX_SEQUENCE_LENGTH = 1000
 MAX_FEATURES = 68
 
 INFERENCE_BATCH_SIZE = 128
